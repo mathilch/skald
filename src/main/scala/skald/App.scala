@@ -13,6 +13,7 @@ object Main extends App {
     tabCount: Int = 0, 
     historyIdx: Int = -1, 
     env: ShellEnv = ShellEnv(),
+    envHistory: List[ShellEnv] = Nil,
     cachedPrompt: String = ""
   ): Unit = {
     
@@ -34,24 +35,39 @@ object Main extends App {
       case Enter => 
         val cmdLine = buffer.toString.trim
         System.out.print("\r\n")
-
-        if (cmdLine.nonEmpty) {
+        
+        if (cmdLine == "undo") {
+          envHistory match {
+            case previousEnv :: tail =>
+              System.out.print(s"undo: Rolled back shell environment to: ${previousEnv.cwd}\r\n")
+              JobManager.reapJobs()
+              loop(new StringBuilder(), 0, -1, previousEnv, envHistory = tail, cachedPrompt = "")
+              
+            case Nil =>
+              System.out.print("undo: No shell environment to roll back to!\r\n")
+              JobManager.reapJobs()
+              loop(new StringBuilder(), 0, -1, env, envHistory = Nil, cachedPrompt = "")
+          }
+        } 
+        else if (cmdLine.nonEmpty) {
           val tokens = Lexer.tokenizeInput(cmdLine)
           Parser.parse(tokens) match {
             case Some(command) => {
               HistoryManager.addCommand(cmdLine)
               val (res, nextEnv) = Executor.evaluate(command, env)
               JobManager.reapJobs()
-              loop(new StringBuilder(), 0, -1, nextEnv, cachedPrompt = "")
+              
+              val updatedHistory = if (nextEnv != env) env :: envHistory else envHistory
+              loop(new StringBuilder(), 0, -1, nextEnv, updatedHistory, cachedPrompt = "")
             }
             case None => 
               System.out.print(s"Unknown\r\n")
               JobManager.reapJobs()
-              loop(new StringBuilder(), 0, -1, env, cachedPrompt = "")
+              loop(new StringBuilder(), 0, -1, env, envHistory, cachedPrompt = "")
           }
         } else {
           JobManager.reapJobs()
-          loop(new StringBuilder(), 0, -1, env, cachedPrompt = "")
+          loop(new StringBuilder(), 0, -1, env, envHistory, cachedPrompt = "")
         }
 
       case Tab =>
@@ -59,20 +75,20 @@ object Main extends App {
         Completer.complete(currentInput, env) match {
           case NoMatch =>
             System.out.print("\u0007")
-            loop(buffer, 0, historyIdx, env, cachedPrompt = prompt)
+            loop(buffer, 0, historyIdx, env, envHistory, cachedPrompt = prompt)
 
           case SingleMatch(text) =>
             buffer.clear()
             buffer.append(text)
             System.out.print(s"\r\u001b[K$prompt$buffer")
-            loop(buffer, 0, historyIdx, env, cachedPrompt = prompt)
+            loop(buffer, 0, historyIdx, env, envHistory, cachedPrompt = prompt)
 
           case MultipleMatches(lcp, options) =>
             if (lcp.length > currentInput.length) {
               buffer.clear()
               buffer.append(lcp)
               System.out.print(s"\r\u001b[K$prompt$buffer")
-              loop(buffer, 0, historyIdx, env, cachedPrompt = prompt)
+              loop(buffer, 0, historyIdx, env, envHistory, cachedPrompt = prompt)
             } else if (tabCount == 0) {
               System.out.print("\u0007")
               loop(buffer, 1, historyIdx, env, cachedPrompt = prompt)
@@ -80,16 +96,16 @@ object Main extends App {
               System.out.print("\n" + options.sorted.mkString("  ") + "\n")
               System.out.print(s"$prompt$buffer")
               System.out.flush()
-              loop(buffer, 2, historyIdx, env, cachedPrompt = prompt)
+              loop(buffer, 2, historyIdx, env, envHistory, cachedPrompt = prompt)
             } else {
               System.out.print("\u0007")
-              loop(buffer, 2, historyIdx, env, cachedPrompt = prompt)
+              loop(buffer, 2, historyIdx, env, envHistory, cachedPrompt = prompt)
             }
         }
 
       case Backspace => 
         if (buffer.nonEmpty) buffer.deleteCharAt(buffer.length - 1)
-        loop(buffer, 0, historyIdx, env, cachedPrompt = prompt)
+        loop(buffer, 0, historyIdx, env, envHistory, cachedPrompt = prompt)
 
       case UpArrow => 
         val idx = historyIdx + 1
@@ -100,9 +116,9 @@ object Main extends App {
           buffer.clear()
           buffer.append(out)
 
-          loop(buffer, 0, idx, env, cachedPrompt = prompt)
+          loop(buffer, 0, idx, env, envHistory, cachedPrompt = prompt)
         } else {
-          loop(buffer, 0, historyIdx, env, cachedPrompt = prompt)
+          loop(buffer, 0, historyIdx, env, envHistory, cachedPrompt = prompt)
         }
 
       case DownArrow => 
@@ -114,19 +130,19 @@ object Main extends App {
         buffer.append(out)
 
         if (historyIdx == -1) {
-          loop(buffer, 0, historyIdx, env, cachedPrompt = prompt)
+          loop(buffer, 0, historyIdx, env, envHistory, cachedPrompt = prompt)
         } else
-        loop(buffer, 0, idx, env, cachedPrompt = prompt)
+        loop(buffer, 0, idx, env, envHistory, cachedPrompt = prompt)
 
       case CharKey(c) => 
         buffer.append(c)
-        loop(buffer, 0, -1, env, cachedPrompt = prompt)
+        loop(buffer, 0, -1, env, envHistory, cachedPrompt = prompt)
 
-      case Escape => loop(buffer, 0, -1, env, cachedPrompt = prompt)
+      case Escape => loop(buffer, 0, -1, env, envHistory, cachedPrompt = prompt)
 
       case Unknown =>
         System.out.print("\u0007")
-        loop(buffer, 0, -1, env, cachedPrompt = prompt)
+        loop(buffer, 0, -1, env, envHistory, cachedPrompt = prompt)
     }
   }
 
