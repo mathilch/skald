@@ -10,44 +10,44 @@ case class CommandResult(stdout: String, stderr: String = "", exitCode: Int = 0)
 
 object Executor {
 
-  def run(cmd: Command, env: ShellEnv): Unit = 
-    evaluate(cmd, env, None, false)
+  def run(cmd: Command, env: ShellEnv): Unit = {
+    evaluate(cmd, env, Iterator.empty, false)
+  }
 
   def evaluate(
     cmd: Command, 
     env: ShellEnv = ShellEnv(),
-    stdin: Option[String] = None, 
+    stdin: Iterator[ShellData] = Iterator.empty, 
     isSilent: Boolean = false
-  ): (CommandResult, ShellEnv) = cmd match {
+  ): (ExecutionResult, ShellEnv) = cmd match {
 
 
     case Exit => 
       System.exit(0)
-      (CommandResult(""), env)
+      (ExecutionResult(Iterator.empty), env)
 
     case Echo(args) => 
-      val out = args.mkString(" ") + "\n"
-      shouldPrint(out, isSilent)
-      (CommandResult(out), env)
+      val out = args.mkString(" ")
+      val data = Iterator(ShellData.Text(out))
+      (ExecutionResult(data), env)
 
     case Pwd() => 
-      val out = env.cwd.toString() + "\n"
-      shouldPrint(out, isSilent) 
-      (CommandResult(out), env)
+      val data = Iterator(ShellData.Text(env.cwd.toString()))
+      (ExecutionResult(data), env)
 
     case Cd(args) => 
       handleCd(args.headOption.getOrElse("~"), env.cwd) match {
-        case Right(newPath) => (CommandResult(""), env.withCwd(newPath))
+        case Right(newPath) => (ExecutionResult(Iterator.empty), env.withCwd(newPath))
         case Left(err)      => 
-          val out = err + "\n"
-          shouldPrint(out, isSilent)
-          (CommandResult("", out, 1), env)
+          val errStr = err + "\n"
+          printError(errStr, isSilent)
+          (ExecutionResult(Iterator.empty, stderr = errStr, 1), env)
       }
 
     case Type(args) => 
-      val out = handleType(args.headOption.getOrElse("")) + "\n"
-      shouldPrint(out, isSilent)
-      (CommandResult(out), env)
+      val out = handleType(args.headOption.getOrElse(""))
+      val data = Iterator(ShellData.Text(out))
+      (ExecutionResult(Iterator.empty), env)
 
     case Complete(args) =>
       args match {
@@ -55,20 +55,20 @@ object Executor {
           CompletionRegistry.get(cmd) match {
             case Some(path) => 
               val out = s"complete -C '$path' $cmd\n"
-              shouldPrint(out, isSilent)
-              (CommandResult(out), env)
+              val data = Iterator(ShellData.Text(out))
+              (ExecutionResult(data), env)
             case None =>
               val out = s"complete: $cmd: no completion specification\n"
-              shouldPrint(out, isSilent)
-              (CommandResult(out), env)
+              printError(out, isSilent)
+              (ExecutionResult(Iterator.empty, stderr = out), env)
           }
         case RegisterSpec(path, cmd) => 
           CompletionRegistry.register(path, cmd)
-          (CommandResult(""), env)
+          (ExecutionResult(Iterator.empty), env)
 
         case UnregisterSpec(cmd) =>
           CompletionRegistry.unregister(cmd)
-          (CommandResult(""), env)
+          (ExecutionResult(Iterator.empty), env)
          
       }
 
@@ -77,28 +77,28 @@ object Executor {
         JobManager.printJob(job)
         if (!job.process.isAlive) JobManager.removeJob(job.id)
       }
-      (CommandResult(""), env)
+      (ExecutionResult(Iterator.empty), env)
 
     case History(arg) =>
         arg match {
           case nHistory(n) => 
             val out = HistoryManager.showHistory(n)
-            shouldPrint(out, isSilent)
-            (CommandResult(out), env)
+            val data = Iterator(ShellData.Text(out))
+            (ExecutionResult(data), env)
           case ReadFromFile(file) => 
             HistoryManager.readFromFile(file)
-            (CommandResult(""), env)
+            (ExecutionResult(Iterator.empty), env)
           case WriteToFile(file) =>
             HistoryManager.writeToFile(file)
-            (CommandResult(""), env)
+            (ExecutionResult(Iterator.empty), env)
           case AppendToFile(file) =>
             HistoryManager.appendToFile(file)
-            (CommandResult(""), env)
+            (ExecutionResult(Iterator.empty), env)
 
           case ShowAll => 
             val out = HistoryManager.showHistory()
-            shouldPrint(out, isSilent)
-            (CommandResult(out), env)
+            val data = Iterator(ShellData.Text(out))
+            (ExecutionResult(data), env)
         }
 
     case Declare(arg) =>
@@ -107,20 +107,20 @@ object Executor {
           val res = env.format(variable).fold(
             err => {
               val outerr = err + "\n"
-              shouldPrint(outerr, isSilent)
-              CommandResult(stdout = "", stderr = outerr, exitCode = 1)
+              printError(outerr, isSilent)
+              ExecutionResult(Iterator.empty, stderr = outerr, exitCode = 1)
             },
             out => {
               val outstr = out + "\n"
-              shouldPrint(outstr, isSilent)
-              CommandResult(out)
+              val data = Iterator(ShellData.Text(outstr))
+              ExecutionResult(data)
             }
           )
           (res, env)
         
         case AssignVariable(variable, value) =>
           val nextEnv = env.setVariable(variable, value)
-          (CommandResult(""), nextEnv)
+          (ExecutionResult(Iterator.empty), nextEnv)
       }
 
     case Subprocess(cmd) =>
@@ -134,50 +134,42 @@ object Executor {
           val process = pb.start()
           val pid = process.pid()
 
-          val newJob = BackgroundJob(jobId, pid, s"$name ${args.mkString(" ")}", process)
+          val cmdLine = s"$name ${args.mkString(" ")}"
+          val newJob = BackgroundJob(jobId, pid, cmdLine, process)
           JobManager.addJob(newJob)
 
           System.out.println(s"[$jobId] $pid")
-          (CommandResult(""), env)
+          val data = Iterator(ShellData.ProcessInfo(pid.toInt, cmdLine))
+          (ExecutionResult(data), env)
         case _ =>
           System.out.println(s"[$jobId] (builtin)")
           new Thread(() => run(cmd, env)).start()
-          (CommandResult(""), env)
+          val data = Iterator(ShellData.ProcessInfo(0, "(builtin)"))
+          (ExecutionResult(data), env)
       }
 
     case External(name, args) => 
       val res = runExternal(name, args, env, stdin)
-      if (!isSilent) {
-        if (res.stdout.nonEmpty) {
-          System.out.print(res.stdout)
-          System.out.flush()
-        }
-        if (res.stderr.nonEmpty) {
-          System.err.print(res.stderr)
-          System.err.flush()
-        }
-      }
+      printError(res.stderr, isSilent)
       (res, env)
 
-    case Pipeline(commands) => 
-      val allExternals = commands.forall(_.isInstanceOf[External])
-      if (allExternals && commands.nonEmpty) {
-        val externals = commands.collect { case e: External => e }
-        runPipeline(externals, env)
-      } else {
-        executeChain(commands, stdin, env)
-      }
-      (CommandResult(""), env)
-
+    case Pipeline(commands) => executeChain(commands, stdin, env)
       
     case RedirectStdout(cmd, targetFile) => 
       val (res, nextEnv) = evaluate(cmd, env, stdin, isSilent = true)
-      Files.writeToFile(targetFile, res.stdout)
-      if (res.stderr.nonEmpty) {
-        System.out.print(res.stderr)
-        System.out.flush()
+
+      val writer = new java.io.BufferedWriter(new java.io.FileWriter(targetFile))
+      res.output.foreach { item =>
+        writer.write(item.asString + "\n")
       }
-      (res.copy(stdout = ""), nextEnv) 
+      writer.close()
+
+      if (res.stderr.nonEmpty) {
+          System.out.print(res.stderr)
+          System.out.flush()
+        }
+
+      (res.copy(output = Iterator.empty), nextEnv) 
 
     case RedirectStderr(cmd, targetFile) =>
       val (res, nextEnv) = evaluate(cmd, env, stdin, isSilent = true)
@@ -190,12 +182,18 @@ object Executor {
 
     case AppendStdout(cmd, targetFile) =>
       val (res, nextEnv) = evaluate(cmd, env, stdin, isSilent = true)
-      Files.appendToFile(targetFile, res.stdout)
+      
+      val writer = new java.io.BufferedWriter(new java.io.FileWriter(targetFile, true))
+      res.output.foreach { item => 
+        writer.write(item.asString + "\n")
+      }
+      writer.close()
+      
       if (res.stderr.nonEmpty) {
         System.out.print(res.stderr)
         System.out.flush()
       }
-      (res.copy(stdout = ""), nextEnv)
+      (res.copy(output = Iterator.empty), nextEnv)
 
     case AppendStderr(cmd, targetFile) =>
       val (res, nextEnv) = evaluate(cmd, env, stdin, isSilent = true)
@@ -207,13 +205,15 @@ object Executor {
       (res.copy(stderr = ""), nextEnv)
   }
 
-  private def executeChain(commands: List[Command], stdin: Option[String], initialEnv: ShellEnv): (CommandResult, ShellEnv) = {
-    val startValue = (CommandResult("", "", 0), initialEnv)
-
-    commands.foldLeft(startValue) { case ((acc, env), cmd) =>
-      val currentStdin = if (acc.stdout.isEmpty) stdin else Some(acc.stdout)
-      val (nextResult, nextEnv) = evaluate(cmd, env, currentStdin, isSilent = (cmd != commands.last))
-      (nextResult, nextEnv)
+  private def executeChain(
+    commands: List[Command], 
+    stdin: Iterator[ShellData], 
+    initialEnv: ShellEnv
+  ): (ExecutionResult, ShellEnv) = {
+    
+    commands.foldLeft((ExecutionResult(stdin), initialEnv)) {
+      case ((accRes, currentEnv), cmd) =>
+        evaluate(cmd, currentEnv, accRes.output, isSilent = (cmd != commands.last))
     }
   }
 
@@ -222,7 +222,7 @@ object Executor {
   /* stdin tilføjet i tilfælde af at external er højre led i en pipeline, i så fald vil stdin beskrive
    * output fra venstre led
   */
-  private def runExternal(name: String, args: List[String], env: ShellEnv, stdin: Option[String] = None): CommandResult = {
+  private def runExternal(name: String, args: List[String], env: ShellEnv, stdin: Iterator[ShellData]): ExecutionResult = {
     Path.findInPath(name) match {
       case Some(fullPath) =>
 
@@ -230,64 +230,40 @@ object Executor {
         pb.directory(env.cwd.toFile)
         val process = pb.start()
 
-        stdin.foreach { input =>
-          val writer = new java.io.BufferedWriter(new java.io.OutputStreamWriter(process.getOutputStream))
-          writer.write(input)
-          writer.flush()
-          writer.close()
+        if (stdin.nonEmpty) {
+          new Thread(() => {
+            val writer = new java.io.BufferedWriter(new java.io.OutputStreamWriter(process.getOutputStream))
+            stdin.foreach { data =>
+              writer.write(data.asString + "\n")
+            }
+            writer.flush()
+            writer.close()
+          }).start()
         }
 
-        val out = new StringBuilder()
-        val outReader = new java.io.BufferedReader(new java.io.InputStreamReader(process.getInputStream))
-        var line: String = null
-        while ({ line = outReader.readLine(); line != null }) {
-          out.append(line).append("\n")
-        }
-
-        val err = new StringBuilder()
-        val errReader = new java.io.BufferedReader(new java.io.InputStreamReader(process.getErrorStream))
-        while ({ line = errReader.readLine(); line != null }) {
-          err.append(line).append("\n")
-        }
-
-        val exitCode = process.waitFor()
-        CommandResult(out.toString(), err.toString(), exitCode)
+        val reader = new java.io.BufferedReader(new java.io.InputStreamReader(process.getInputStream))
         
-      case None => CommandResult("", s"$name: not found\n", 127)
+        val outputIterator = new Iterator[ShellData] {
+          private var nextLine: String = reader.readLine()
+          
+          override def hasNext: Boolean = nextLine != null
+          
+          override def next(): ShellData = {
+            val current = nextLine
+            nextLine = reader.readLine() // Forbered næste kald
+            
+            // Hvis vi er færdige, vent på at processen dør pænt
+            if (nextLine == null) process.waitFor() 
+            
+            ShellData.Text(current)
+          }
+        }
+
+        ExecutionResult(outputIterator)
+
+      case None => 
+        ExecutionResult(Iterator(ShellData.Text(s"$name: not found")), exitCode = 127)
     }
-  }
-
-  private def runPipeline(commands: List[External], env: ShellEnv): CommandResult = {
-    import scala.jdk.CollectionConverters._
-
-    val builders = commands.map { cmd =>
-      val pb = new java.lang.ProcessBuilder((cmd.name :: cmd.args)*)
-      pb.directory(env.cwd.toFile())
-      pb
-    }
-
-    val processes = java.lang.ProcessBuilder.startPipeline(builders.asJava).asScala.toList
-    val lastProcess = processes.last
-
-    val output = readAndStream(lastProcess)
-    processes.foreach(_.waitFor())
-
-    CommandResult(output)
-  }
-
-
-
-  private def readAndStream(process: java.lang.Process): String = {
-    val reader = new java.io.BufferedReader(new java.io.InputStreamReader(process.getInputStream))
-    val sb = new StringBuilder()
-    var line: String = null
-    
-    while ({ line = reader.readLine(); line != null }) {
-      System.out.println(line) 
-      System.out.flush()
-      sb.append(line).append("\n")
-    }
-    sb.toString()
   }
 
   private def handleType(cmd: String): String = {
@@ -306,10 +282,10 @@ object Executor {
     else Left(s"cd: $pathStr: No such file or directory")
   }
 
-
-  private def shouldPrint(str: String, check: Boolean) =
-    if (!check) {
-      System.out.print(str)
+  private def printError(err: String, isSilent: Boolean): Unit = {
+    if (!isSilent && err.nonEmpty) {
+      System.out.print(err)
       System.out.flush()
     }
+  }
 }

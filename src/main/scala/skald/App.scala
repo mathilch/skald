@@ -55,6 +55,17 @@ object Main extends App {
             case Some(command) => {
               HistoryManager.addCommand(cmdLine)
               val (res, nextEnv) = Executor.evaluate(command, env)
+
+              res.output.foreach { item =>
+                System.out.print(item.asString + "\n")
+                System.out.flush()
+              }
+
+              if (res.stderr.nonEmpty) {
+                System.out.print(res.stderr)
+                System.out.flush()
+              }
+
               JobManager.reapJobs()
               
               val updatedHistory = if (nextEnv != env) env :: envHistory else envHistory

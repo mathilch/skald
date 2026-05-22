@@ -1,16 +1,28 @@
 package skald 
 
+import scala.annotation.tailrec
+
 object Lexer {
 
   def tokenizeInput(input: String): List[String] = {
+    @tailrec
     def aux(str: List[Char], token: List[Char], acc: List[String], currentQuote: Option[Char]): List[String] = {
       str match {
         case Nil => 
           if (token.nonEmpty) (token.reverse.mkString :: acc).reverse
           else acc.reverse
         case '\\' :: c :: tail => 
-          if (currentQuote.contains('\'')) aux(c :: tail, '\\' :: token, acc, currentQuote)
-          else aux(tail, c :: token, acc, currentQuote)
+          if (currentQuote.contains('\'')) {
+            aux(c :: tail, '\\' :: token, acc, currentQuote)
+          } else {
+            val unescapedChar = c match {
+              case 'n' => '\n'
+              case 't' => '\t'
+              case 'r' => '\r'
+              case other => other
+            }
+            aux(tail, unescapedChar :: token, acc, currentQuote)
+          } 
 
         case (q @ ('\'' | '\"')) :: tail =>
           currentQuote match {

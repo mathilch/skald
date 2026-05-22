@@ -1,5 +1,7 @@
 package skald 
 
+import java.io.Reader
+
 sealed trait Key
 case object UpArrow extends Key
 case object DownArrow extends Key
@@ -13,7 +15,7 @@ case class CharKey(c: Char) extends Key
 case object Unknown extends Key
 
 object KeyReader {
-  def readKey(inputSource: java.io.InputStream): Key = {
+  def readKey(inputSource: Reader): Key = {
     inputSource.read() match {
       case -1 | 4 => CtrlD
       case 3      => CtrlC
@@ -21,7 +23,7 @@ object KeyReader {
       case 9      => Tab
       case 127    => Backspace
       case 27 => 
-        if (inputSource.available() > 0) {
+        if (inputSource.ready()) {
           val next1 = inputSource.read()
           val next2 = inputSource.read()
           (next1, next2) match {
@@ -31,7 +33,7 @@ object KeyReader {
           }
         } else Escape 
         
-      case c if c >= 32 && c <= 126 => CharKey(c.toChar)
+      case c if c >= 32 => CharKey(c.toChar)
       case _ => Unknown
     }
   }

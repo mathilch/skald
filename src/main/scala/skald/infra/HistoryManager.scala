@@ -1,31 +1,24 @@
 package skald 
 
 import java.nio.file.{Paths, Files => JFiles}
+import scala.util.Properties
 
 object HistoryManager {
   
   private var history = List.empty[String]
   private var historyBuffer = List.empty[String]
 
+  val home = System.getProperty("user.home")
+  private val historyPath: String = sys.env.getOrElse("HISTFILE", s"$home/.skald_history")
+
   def init(): Unit = {
-    sys.env.get("HISTFILE") match {
-      case Some(path) if JFiles.exists(Paths.get(path)) =>
-        history = List.empty[String]
-        historyBuffer = List.empty[String]
-        readFromFile(path)
-      case _ => ()
-    }
+    history = Files.readFromFile(historyPath)
   }
 
   def save(): Unit = {
-    sys.env.get("HISTFILE") match {
-      case Some(path) if JFiles.exists(Paths.get(path)) =>
-        history.foreach(str => Files.appendNewlineToFile(path, str))
-      case _ => ()
-    }
+    appendToFile(historyPath)
   }
-
-
+  
   def addCommand(cmd: String): Unit = 
     if (cmd.nonEmpty) {
       history = cmd :: history
@@ -33,10 +26,7 @@ object HistoryManager {
     }
   
   def getAtIndex(idx: Int): String =
-    history.lift(idx) match {
-      case Some(s) => s
-      case None => ""
-    }
+    history.lift(idx).getOrElse("")
   
   def size: Int =
     history.size
@@ -57,7 +47,7 @@ object HistoryManager {
       .mkString("\n") + "\n"
 
   def readFromFile(file: String): Unit =
-    Files.readFromFile(file).foreach(cmd => HistoryManager.addCommand(cmd))
+    Files.readFromFile(file).foreach(cmd => history = cmd :: history)
 
   def writeToFile(file: String): Unit =
     history.foreach(cmd => Files.appendToFile(file, cmd))
