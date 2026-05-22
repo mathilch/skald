@@ -6,8 +6,6 @@ import scala.sys.process.*
 import skald.JobManager.BackgroundJob
 import skald.Files.readFromFile
 
-case class CommandResult(stdout: String, stderr: String = "", exitCode: Int = 0)
-
 object Executor {
 
   def run(cmd: Command, env: ShellEnv): Unit = {
@@ -150,7 +148,6 @@ object Executor {
 
     case External(name, args) => 
       val res = runExternal(name, args, env, stdin)
-      printError(res.stderr, isSilent)
       (res, env)
 
     case Pipeline(commands) => executeChain(commands, stdin, env)
@@ -175,55 +172,6 @@ object Executor {
         case Stdout => (res.copy(output = Iterator.empty), nextEnv)
         case Stderr => (res.copy(stderr = ""), nextEnv)
       }
-      
-    // case RedirectStdout(cmd, targetFile) => 
-    //   val (res, nextEnv) = evaluate(cmd, env, stdin, isSilent = true)
-    //
-    //   val writer = new java.io.BufferedWriter(new java.io.FileWriter(targetFile))
-    //   res.output.foreach { item =>
-    //     writer.write(item.asString + "\n")
-    //   }
-    //   writer.close()
-    //
-    //   if (res.stderr.nonEmpty) {
-    //       System.out.print(res.stderr)
-    //       System.out.flush()
-    //     }
-    //
-    //   (res.copy(output = Iterator.empty), nextEnv) 
-    //
-    // case RedirectStderr(cmd, targetFile) =>
-    //   val (res, nextEnv) = evaluate(cmd, env, stdin, isSilent = true)
-    //   Files.writeToFile(targetFile, res.stderr)
-    //   if (res.stdout.nonEmpty) {
-    //     System.out.print(res.stdout)
-    //     System.out.flush()
-    //   }
-    //   (res.copy(stderr = ""), nextEnv)
-    //
-    // case AppendStdout(cmd, targetFile) =>
-    //   val (res, nextEnv) = evaluate(cmd, env, stdin, isSilent = true)
-    //  
-    //   val writer = new java.io.BufferedWriter(new java.io.FileWriter(targetFile, true))
-    //   res.output.foreach { item => 
-    //     writer.write(item.asString + "\n")
-    //   }
-    //   writer.close()
-    //  
-    //   if (res.stderr.nonEmpty) {
-    //     System.out.print(res.stderr)
-    //     System.out.flush()
-    //   }
-    //   (res.copy(output = Iterator.empty), nextEnv)
-    //
-    // case AppendStderr(cmd, targetFile) =>
-    //   val (res, nextEnv) = evaluate(cmd, env, stdin, isSilent = true)
-    //   Files.appendToFile(targetFile, res.stderr)
-    //   if (res.stdout.nonEmpty) {
-    //     System.out.print(res.stdout)
-    //     System.out.flush()
-    //   }
-    //   (res.copy(stderr = ""), nextEnv)
   }
 
   private def executeChain(

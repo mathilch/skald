@@ -19,9 +19,9 @@ object Parser {
       parse(left).map { cmd =>
         val (target, mode) = op match {
           case "1>>" | ">>" => (Stdout, Append)
-          case "2>>" => (Stderr, Append)
-          case "2>" => (Stderr, Overwrite)
-          case _ => (Stdout, Overwrite)
+          case "2>>"        => (Stderr, Append)
+          case "2>"         => (Stderr, Overwrite)
+          case _            => (Stdout, Overwrite) // > eller 1>
         }
         Redirect(cmd, target, mode, right)
       }
