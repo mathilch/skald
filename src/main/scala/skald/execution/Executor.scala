@@ -154,55 +154,76 @@ object Executor {
       (res, env)
 
     case Pipeline(commands) => executeChain(commands, stdin, env)
+
+    case Redirect(cmd, target, mode, targetFile) =>
+      val (res, nextEnv) = evaluate(cmd, env, stdin, isSilent = true)
+
+      println(s"DEBUG: stdout length = ${res.output.size}")
+      println(s"DEBUG: stderr content = '${res.stderr}'")
+
+      val dataToFile = target match {
+        case Stdout => res.output.map(_.asString).mkString("\n") + "\n"
+        case Stderr => res.stderr
+      }
+
+      mode match {
+        case Overwrite => Files.writeToFile(targetFile, dataToFile)
+        case Append => Files.appendNewlineToFile(targetFile, dataToFile)
+      }
+
+      target match {
+        case Stdout => (res.copy(output = Iterator.empty), nextEnv)
+        case Stderr => (res.copy(stderr = ""), nextEnv)
+      }
       
-    case RedirectStdout(cmd, targetFile) => 
-      val (res, nextEnv) = evaluate(cmd, env, stdin, isSilent = true)
-
-      val writer = new java.io.BufferedWriter(new java.io.FileWriter(targetFile))
-      res.output.foreach { item =>
-        writer.write(item.asString + "\n")
-      }
-      writer.close()
-
-      if (res.stderr.nonEmpty) {
-          System.out.print(res.stderr)
-          System.out.flush()
-        }
-
-      (res.copy(output = Iterator.empty), nextEnv) 
-
-    case RedirectStderr(cmd, targetFile) =>
-      val (res, nextEnv) = evaluate(cmd, env, stdin, isSilent = true)
-      Files.writeToFile(targetFile, res.stderr)
-      if (res.stdout.nonEmpty) {
-        System.out.print(res.stdout)
-        System.out.flush()
-      }
-      (res.copy(stderr = ""), nextEnv)
-
-    case AppendStdout(cmd, targetFile) =>
-      val (res, nextEnv) = evaluate(cmd, env, stdin, isSilent = true)
-      
-      val writer = new java.io.BufferedWriter(new java.io.FileWriter(targetFile, true))
-      res.output.foreach { item => 
-        writer.write(item.asString + "\n")
-      }
-      writer.close()
-      
-      if (res.stderr.nonEmpty) {
-        System.out.print(res.stderr)
-        System.out.flush()
-      }
-      (res.copy(output = Iterator.empty), nextEnv)
-
-    case AppendStderr(cmd, targetFile) =>
-      val (res, nextEnv) = evaluate(cmd, env, stdin, isSilent = true)
-      Files.appendToFile(targetFile, res.stderr)
-      if (res.stdout.nonEmpty) {
-        System.out.print(res.stdout)
-        System.out.flush()
-      }
-      (res.copy(stderr = ""), nextEnv)
+    // case RedirectStdout(cmd, targetFile) => 
+    //   val (res, nextEnv) = evaluate(cmd, env, stdin, isSilent = true)
+    //
+    //   val writer = new java.io.BufferedWriter(new java.io.FileWriter(targetFile))
+    //   res.output.foreach { item =>
+    //     writer.write(item.asString + "\n")
+    //   }
+    //   writer.close()
+    //
+    //   if (res.stderr.nonEmpty) {
+    //       System.out.print(res.stderr)
+    //       System.out.flush()
+    //     }
+    //
+    //   (res.copy(output = Iterator.empty), nextEnv) 
+    //
+    // case RedirectStderr(cmd, targetFile) =>
+    //   val (res, nextEnv) = evaluate(cmd, env, stdin, isSilent = true)
+    //   Files.writeToFile(targetFile, res.stderr)
+    //   if (res.stdout.nonEmpty) {
+    //     System.out.print(res.stdout)
+    //     System.out.flush()
+    //   }
+    //   (res.copy(stderr = ""), nextEnv)
+    //
+    // case AppendStdout(cmd, targetFile) =>
+    //   val (res, nextEnv) = evaluate(cmd, env, stdin, isSilent = true)
+    //  
+    //   val writer = new java.io.BufferedWriter(new java.io.FileWriter(targetFile, true))
+    //   res.output.foreach { item => 
+    //     writer.write(item.asString + "\n")
+    //   }
+    //   writer.close()
+    //  
+    //   if (res.stderr.nonEmpty) {
+    //     System.out.print(res.stderr)
+    //     System.out.flush()
+    //   }
+    //   (res.copy(output = Iterator.empty), nextEnv)
+    //
+    // case AppendStderr(cmd, targetFile) =>
+    //   val (res, nextEnv) = evaluate(cmd, env, stdin, isSilent = true)
+    //   Files.appendToFile(targetFile, res.stderr)
+    //   if (res.stdout.nonEmpty) {
+    //     System.out.print(res.stdout)
+    //     System.out.flush()
+    //   }
+    //   (res.copy(stderr = ""), nextEnv)
   }
 
   private def executeChain(
@@ -242,7 +263,6 @@ object Executor {
         }
 
         val reader = new java.io.BufferedReader(new java.io.InputStreamReader(process.getInputStream))
-        
         val outputIterator = new Iterator[ShellData] {
           private var nextLine: String = reader.readLine()
           
@@ -259,7 +279,10 @@ object Executor {
           }
         }
 
-        ExecutionResult(outputIterator)
+        val errorStream = process.getErrorStream()
+        val errout = scala.io.Source.fromInputStream(errorStream).mkString
+
+        ExecutionResult(outputIterator, stderr = errout)
 
       case None => 
         ExecutionResult(Iterator(ShellData.Text(s"$name: not found")), exitCode = 127)

@@ -12,13 +12,14 @@ object HistoryManager {
   private val historyPath: String = sys.env.getOrElse("HISTFILE", s"$home/.skald_history")
 
   def init(): Unit = {
-    history = Files.readFromFile(historyPath)
+    val lines = Files.readFromFile(historyPath)
+    history = lines.foldLeft(List.empty[String])((acc, elem) => elem :: acc)
   }
 
-  def save(): Unit = {
-    appendToFile(historyPath)
-  }
+  def save(): Unit = 
+    if (historyBuffer.nonEmpty) appendToFile(historyPath)
   
+
   def addCommand(cmd: String): Unit = 
     if (cmd.nonEmpty) {
       history = cmd :: history

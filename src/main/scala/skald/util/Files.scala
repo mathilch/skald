@@ -48,7 +48,7 @@ object Files {
   }
 
   def appendNewlineToFile(file: String, content: String): Unit = {
-    val lineWithSeperator = content + "\n"
+    val lineWithSeperator = if (content.endsWith("\n")) content else content + "\n"
 
     JFiles.write(
       Paths.get(file), 

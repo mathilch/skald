@@ -17,12 +17,13 @@ object Parser {
       val op = tokens(rIdx)
 
       parse(left).map { cmd =>
-        op match {
-          case "1>>" | ">>" => AppendStdout(cmd, right)
-          case "2>>" => AppendStderr(cmd, right)
-          case "2>" => RedirectStderr(cmd, right)
-          case _ => RedirectStdout(cmd, right)
+        val (target, mode) = op match {
+          case "1>>" | ">>" => (Stdout, Append)
+          case "2>>" => (Stderr, Append)
+          case "2>" => (Stderr, Overwrite)
+          case _ => (Stdout, Overwrite)
         }
+        Redirect(cmd, target, mode, right)
       }
     } else {
       val pipeIdx = tokens.lastIndexOf("|")

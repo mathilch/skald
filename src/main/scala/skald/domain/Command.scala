@@ -50,10 +50,19 @@ case class UnregisterSpec(cmd: String) extends CompleteFlag
 case class External(name: String, args: List[String]) extends Command
 case class Pipeline(commands: List[Command]) extends Command
 
-case class RedirectStdout(cmd: Command, targetFile: String) extends Command
-case class RedirectStderr(cmd: Command, targetFile: String) extends Command
-case class AppendStdout(cmd: Command, targetFile: String) extends Command
-case class AppendStderr(cmd: Command, targetFile: String) extends Command
+sealed trait RedirectionType
+case object Stdout extends RedirectionType
+case object Stderr extends RedirectionType
+
+sealed trait RedirectionMode
+case object Overwrite extends RedirectionMode
+case object Append extends RedirectionMode
+
+case class Redirect(
+  cmd: Command, 
+  target: RedirectionType, 
+  mode: RedirectionMode, 
+  targetFile: String) extends Command
 
 case class Subprocess(cmd: Command) extends Command
 
