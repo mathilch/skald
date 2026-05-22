@@ -1,3 +1,6 @@
-hello
-world
-mixed
+err.txt
+out.txt
+project
+README.md
+src
+target

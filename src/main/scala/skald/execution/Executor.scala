@@ -9,14 +9,13 @@ import skald.Files.readFromFile
 object Executor {
 
   def run(cmd: Command, env: ShellEnv): Unit = {
-    evaluate(cmd, env, Iterator.empty, false)
+    evaluate(cmd, env, Iterator.empty)
   }
 
   def evaluate(
     cmd: Command, 
     env: ShellEnv = ShellEnv(),
     stdin: Iterator[ShellData] = Iterator.empty, 
-    isSilent: Boolean = false
   ): (ExecutionResult, ShellEnv) = cmd match {
 
 
@@ -36,10 +35,7 @@ object Executor {
     case Cd(args) => 
       handleCd(args.headOption.getOrElse("~"), env.cwd) match {
         case Right(newPath) => (ExecutionResult(Iterator.empty), env.withCwd(newPath))
-        case Left(err)      => 
-          val errStr = err + "\n"
-          printError(errStr, isSilent)
-          (ExecutionResult(Iterator.empty, stderr = errStr, 1), env)
+        case Left(err)      => (ExecutionResult(Iterator.empty, stderr = err + "\n", 1), env)
       }
 
     case Type(args) => 
@@ -57,8 +53,7 @@ object Executor {
               (ExecutionResult(data), env)
             case None =>
               val out = s"complete: $cmd: no completion specification\n"
-              printError(out, isSilent)
-              (ExecutionResult(Iterator.empty, stderr = out), env)
+              (ExecutionResult(Iterator.empty, stderr = out, exitCode = 1), env)
           }
         case RegisterSpec(path, cmd) => 
           CompletionRegistry.register(path, cmd)
@@ -105,7 +100,6 @@ object Executor {
           val res = env.format(variable).fold(
             err => {
               val outerr = err + "\n"
-              printError(outerr, isSilent)
               ExecutionResult(Iterator.empty, stderr = outerr, exitCode = 1)
             },
             out => {
@@ -153,10 +147,7 @@ object Executor {
     case Pipeline(commands) => executeChain(commands, stdin, env)
 
     case Redirect(cmd, target, mode, targetFile) =>
-      val (res, nextEnv) = evaluate(cmd, env, stdin, isSilent = true)
-
-      println(s"DEBUG: stdout length = ${res.output.size}")
-      println(s"DEBUG: stderr content = '${res.stderr}'")
+      val (res, nextEnv) = evaluate(cmd, env, stdin)
 
       val dataToFile = target match {
         case Stdout => res.output.map(_.asString).mkString("\n") + "\n"
@@ -182,7 +173,7 @@ object Executor {
     
     commands.foldLeft((ExecutionResult(stdin), initialEnv)) {
       case ((accRes, currentEnv), cmd) =>
-        evaluate(cmd, currentEnv, accRes.output, isSilent = (cmd != commands.last))
+        evaluate(cmd, currentEnv, accRes.output)
     }
   }
 
@@ -251,12 +242,5 @@ object Executor {
 
     if (JFiles.isDirectory(normP)) Right(normP)
     else Left(s"cd: $pathStr: No such file or directory")
-  }
-
-  private def printError(err: String, isSilent: Boolean): Unit = {
-    if (!isSilent && err.nonEmpty) {
-      System.out.print(err)
-      System.out.flush()
-    }
   }
 }
