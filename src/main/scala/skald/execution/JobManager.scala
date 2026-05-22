@@ -1,6 +1,7 @@
 package skald 
 
 import scala.collection.mutable
+import JobStatus._
 
 object JobManager {
 

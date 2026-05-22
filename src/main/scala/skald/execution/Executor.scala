@@ -1,5 +1,12 @@
 package skald 
 
+import Command._
+import RedirectionType._
+import RedirectionMode._
+import CompleteFlag._
+import DeclareFlag._
+import HistoryFlag._
+
 import java.io.File
 import java.nio.file.{Path => JPath, Paths, Files => JFiles}
 import scala.sys.process.*
@@ -28,7 +35,7 @@ object Executor {
       val data = Iterator(ShellData.Text(out))
       (ExecutionResult(data), env)
 
-    case Pwd() => 
+    case Pwd => 
       val data = Iterator(ShellData.Text(env.cwd.toString()))
       (ExecutionResult(data), env)
 
@@ -65,7 +72,7 @@ object Executor {
          
       }
 
-    case Jobs() =>
+    case Jobs =>
       JobManager.jobTable.values.toList.sortBy(_.id).foreach { job =>
         JobManager.printJob(job)
         if (!job.process.isAlive) JobManager.removeJob(job.id)
@@ -74,7 +81,7 @@ object Executor {
 
     case History(arg) =>
         arg match {
-          case nHistory(n) => 
+          case NHistory(n) => 
             val out = HistoryManager.showHistory(n)
             val data = Iterator(ShellData.Text(out))
             (ExecutionResult(data), env)

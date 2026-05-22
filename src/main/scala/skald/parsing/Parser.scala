@@ -1,5 +1,12 @@
 package skald 
 
+import Command._
+import RedirectionType._
+import RedirectionMode._
+import CompleteFlag._
+import DeclareFlag._
+import HistoryFlag._
+
 object Parser {
   def parse(tokens: List[String]): Option[Command] = {
     if (tokens.last == "&") {
@@ -38,15 +45,6 @@ object Parser {
 
         Util.sequence(segments.map(parse)).map(Pipeline.apply)
 
-
-        // val (lTokens, pipeAndRight) = tokens.splitAt(pipeIdx)
-        // val rTokens = pipeAndRight.drop(1)
-        //
-        // for {
-        //   leftCmd <- parse(lTokens)
-        //   rightCmd <- parse(rTokens)
-        // } yield Pipeline(leftCmd, rightCmd)
-        
       } else {
         // Hvis > ikke eksistere
         tokens match {
@@ -56,7 +54,7 @@ object Parser {
               case Some(b) => b match {
                 case Builtin.Exit => Some(Exit)
                 case Builtin.Echo => Some(Echo(tail))
-                case Builtin.Pwd => Some(Pwd())
+                case Builtin.Pwd => Some(Pwd)
                 case Builtin.Type => Some(Type(tail))
                 case Builtin.Cd => Some(Cd(tail))
                 case Builtin.Complete =>
@@ -69,14 +67,14 @@ object Parser {
                       Some(Complete(UnregisterSpec(cmd)))
                     case _ => None
                   }
-                case Builtin.Jobs => Some(Jobs())
+                case Builtin.Jobs => Some(Jobs)
                 case Builtin.History => 
                   tail match {
                     case "-r" :: file :: Nil => Some(History(ReadFromFile(file)))
                     case "-w" :: file :: Nil => Some(History(WriteToFile(file)))
                     case "-a" :: file :: Nil => Some(History(AppendToFile(file)))
                     case n :: Nil => n.toIntOption match {
-                      case Some(number) => Some(History(nHistory(number)))
+                      case Some(number) => Some(History(NHistory(number)))
                       case None => None
                     }
                     case Nil => Some(History(ShowAll))
@@ -94,12 +92,22 @@ object Parser {
                   }
 
               }
-              case None => Some(External(head, tail))
+              case None => FunctionalOp.fromString(head) match {
+                case Some(op) => op match {
+                  case FunctionalOp.Filter  => ???
+                  case FunctionalOp.Map     => ???
+                  case FunctionalOp.Sort    => ???
+                }
+              
+                case _ => Some(External(head, tail))
+              }
             }
         }
       }
 
     }
   }
+
+  private def parseExpr(tokens: List[String]): Option[String] = ???
 }
 

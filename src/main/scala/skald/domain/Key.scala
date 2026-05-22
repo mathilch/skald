@@ -2,21 +2,13 @@ package skald
 
 import java.io.Reader
 
-sealed trait Key
-case object UpArrow extends Key
-case object DownArrow extends Key
-case object LeftArrow extends Key 
-case object RightArrow extends Key
-case object Enter extends Key
-case object Tab extends Key
-case object Backspace extends Key
-case object Escape extends Key
-case object CtrlC extends Key
-case object CtrlD extends Key
-case class CharKey(c: Char) extends Key
-case object Unknown extends Key
+enum Key:
+  case UpArrow, DownArrow, LeftArrow, RightArrow, Enter, Tab, Backspace, Escape, CtrlC, CtrlD, Unknown
+  case CharKey(c: Char)
 
 object KeyReader {
+  import Key._
+
   def readKey(inputSource: Reader): Key = {
     inputSource.read() match {
       case -1 | 4 => CtrlD

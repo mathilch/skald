@@ -34,16 +34,16 @@ object HistoryManager {
 
   def showHistory(): String = 
     history.reverse.zipWithIndex.map { case (cmd, idx) =>
-      s"    ${idx + 1}  $cmd"
+      s"    ${formatIdx(idx)}  $cmd"
     }.mkString("\n") + "\n"
 
   def showHistory(n: Int): String =
     history
       .reverse
       .zipWithIndex
-      .takeRight(n)
+    .takeRight(n)
       .map { (cmd, idx) =>
-        s"    ${idx + 1}  $cmd"
+        s"    ${formatIdx(idx)}  $cmd"
       }
       .mkString("\n") + "\n"
 
@@ -56,6 +56,12 @@ object HistoryManager {
   def appendToFile(file: String): Unit =
     historyBuffer.foreach(cmd => Files.appendNewlineToFile(file, cmd))
     historyBuffer = List.empty[String]
+
+  private def formatIdx(idx: Int): String =
+    val totalCommands = history.size
+    val width = totalCommands.toString.length
+
+    s"%${width}d".format(idx + 1)
 }
 
 

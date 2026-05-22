@@ -3,6 +3,8 @@ package skald
 import scala.io.StdIn
 import scala.sys.process._
 import scala.annotation.tailrec
+import Completion._
+import Key._
 
 object Main extends App {
   Runtime.getRuntime.addShutdownHook(new Thread(() => {Terminal.restore()}))

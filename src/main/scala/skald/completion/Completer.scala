@@ -1,5 +1,7 @@
 package skald
 
+import Completion._
+
 object Completer {
   def complete(currentInput: String, env: ShellEnv): Completion = {
     val lastSpace = currentInput.lastIndexOf(' ')

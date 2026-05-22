@@ -1,7 +1,6 @@
 package skald 
 
-sealed trait Completion
-
-case object NoMatch extends Completion 
-case class SingleMatch(completed: String) extends Completion
-case class MultipleMatches(lcp: String, options: List[String]) extends Completion
+enum Completion:
+  case NoMatch
+  case SingleMatch(completed: String)
+  case MultipleMatches(lcp: String, options: List[String])
