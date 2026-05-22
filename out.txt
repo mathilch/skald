@@ -1,6 +1,0 @@
-err.txt
-out.txt
-project
-README.md
-src
-target

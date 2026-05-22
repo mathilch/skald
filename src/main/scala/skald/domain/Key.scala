@@ -5,6 +5,8 @@ import java.io.Reader
 sealed trait Key
 case object UpArrow extends Key
 case object DownArrow extends Key
+case object LeftArrow extends Key 
+case object RightArrow extends Key
 case object Enter extends Key
 case object Tab extends Key
 case object Backspace extends Key
@@ -29,6 +31,8 @@ object KeyReader {
           (next1, next2) match {
             case (91, 65) => UpArrow
             case (91, 66) => DownArrow
+            case (91, 67) => RightArrow
+            case (91, 68) => LeftArrow
             case _        => Escape 
           }
         } else Escape 

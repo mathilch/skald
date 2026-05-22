@@ -5,7 +5,7 @@ import scala.sys.process._
 import java.io.InputStreamReader
 import java.nio.charset.StandardCharsets
 
-object RawTerminal {
+object Terminal {
   private val ttyFile = new File("/dev/tty")
   val inputSource: Reader = new InputStreamReader(new FileInputStream(ttyFile), StandardCharsets.UTF_8)
 
@@ -15,4 +15,5 @@ object RawTerminal {
 
   def restore(): Unit =
     Seq("sh", "-c", "stty sane < /dev/tty").!
+
 }
