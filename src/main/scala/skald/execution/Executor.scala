@@ -194,6 +194,17 @@ object Executor {
       }
       (ExecutionResult(mappedStream), env)
 
+    case Sort(expr, descending) =>
+      val sortedStream = stdin.toList.sortWith { (left, right) =>
+        val leftVal = evalExpr(expr, left)
+        val rightVal = evalExpr(expr, right)
+        
+        compareValues(leftVal, rightVal) match {
+          case Some(cmp) => cmp < 0
+          case None => false
+        }
+      }.iterator
+      (ExecutionResult(sortedStream), env)
   }
 
   private def valueToData(v: ShellValue): Option[ShellData] = v match {

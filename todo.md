@@ -15,4 +15,5 @@
 - [ ] Eget scripting sprog?
 - [x] Smartere pipes, f.eks. implementer filter og map kommandoer e.g., ls | filter(_.size > 10mb) | map(_.name). 
       Mangler stadig flere operationer: indtil videre filter, map på gt og eq
-
+- [ ] Tilføj nogle flags til functionalOps: sort descending/ascending, map _.created, 
+      accessed, modified skal kunne vælge imellem -t time, -d for date og ingen flags for datetime

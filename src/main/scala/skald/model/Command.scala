@@ -18,6 +18,7 @@ enum Command:
 
   case Filter(expr: Expr)
   case Map(expr: Expr)
+  case Sort(expr: Expr, descending: Boolean = false)
 
 enum DeclareFlag:
   case PrintVariable(variable: String)

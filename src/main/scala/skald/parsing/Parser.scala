@@ -96,21 +96,21 @@ object Parser {
               }
               case None => FunctionalOp.fromString(head) match {
                 case Some(op) => op match {
-                  case FunctionalOp.Filter  => 
+                  case FunctionalOp.Filter=> 
                     parseExpr(tail) match {
                       case Success(expr)  => Success(Filter(expr))
                       case Fail(err)      => Fail(err)
                     }
-                  case FunctionalOp.Map     => 
+                  case FunctionalOp.Map => 
                     parseExpr(tail) match {
                       case Success(expr)  => Success(Map(expr))
                       case Fail(err)      => Fail(err)
                     }
-                  // case FunctionalOp.Sort    => 
-                  //   parseExpr(tail) match {
-                  //     case Some(expr) => Some(Sort(expr))
-                  //     case None => None
-                  //   }
+                  case FunctionalOp.Sort => 
+                    parseExpr(tail) match {
+                      case Success(expr)  => Success(Sort(expr))
+                      case Fail(err)      => Fail(err)
+                    }
                 }
               
                 case _ => Success(External(head, tail))
@@ -137,8 +137,6 @@ object Parser {
           case Some(b) => Expr.LitBool(b)
           case None => Expr.LitStr(value)
         }
-
-          
       }
 
       op match {
