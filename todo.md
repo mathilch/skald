@@ -10,7 +10,7 @@
 - [ ] Miljø, e.g. python til prompt
 - [ ] Exit code visning hvis forrige kommando fejler
 - [ ] Multi-line edits med \
-- [ ] Forbedret fejl håndtering, måske modellér med ADT's?
+- [ ] Forbedret fejl håndtering, måske modellér med ADT's? overkill?
 - [ ] inline suggestions ligesom zsh-autosuggestions
 - [ ] Eget scripting sprog?
 - [x] Smartere pipes, f.eks. implementer filter og map kommandoer e.g., ls | filter(_.size > 10mb) | map(_.name). 

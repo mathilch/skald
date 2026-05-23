@@ -5,6 +5,7 @@ import scala.sys.process._
 import scala.annotation.tailrec
 import Completion._
 import Key._
+import Result._
 
 object Main extends App {
   Runtime.getRuntime.addShutdownHook(new Thread(() => {Terminal.restore()}))
@@ -56,7 +57,7 @@ object Main extends App {
         else if (cmdLine.nonEmpty) {
           val tokens = Lexer.tokenizeInput(cmdLine)
           Parser.parse(tokens) match {
-            case Some(command) => {
+            case Success(command) => {
               HistoryManager.addCommand(cmdLine)
               val (res, nextEnv) = Executor.evaluate(command, env)
 
@@ -75,8 +76,8 @@ object Main extends App {
               val updatedHistory = if (nextEnv != env) env :: envHistory else envHistory
               loop(new StringBuilder(), EditorState(), nextEnv, updatedHistory, cachedPrompt = "")
             }
-            case None => 
-              System.out.print(s"Unknown\r\n")
+            case Fail(err) => 
+              System.out.print(err.printError)
               JobManager.reapJobs()
               loop(new StringBuilder(), EditorState(), env, envHistory, cachedPrompt = "")
           }

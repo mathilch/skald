@@ -6,9 +6,10 @@ import RedirectionMode._
 import CompleteFlag._
 import DeclareFlag._
 import HistoryFlag._
+import Result._
 
 object Parser {
-  def parse(tokens: List[String]): Option[Command] = {
+  def parse(tokens: List[String]): Result[ParseError, Command] = {
     if (tokens.last == "&") {
       val cmd = tokens.init
       return parse(cmd).map(process => Subprocess(process))
@@ -43,53 +44,53 @@ object Parser {
           }
         }.map(_.reverse).reverse
 
-        Util.sequence(segments.map(parse)).map(Pipeline.apply)
+        return segments.map(parse).sequence.map(Pipeline.apply)
 
       } else {
         // Hvis > ikke eksistere
         tokens match {
-          case Nil => None
+          case Nil => Fail(ParseError.MissingArguments(s"Nothing"))
           case head :: tail =>
             Builtin.fromString(head) match {
               case Some(b) => b match {
-                case Builtin.Exit => Some(Exit)
-                case Builtin.Echo => Some(Echo(tail))
-                case Builtin.Pwd => Some(Pwd)
-                case Builtin.Type => Some(Type(tail))
-                case Builtin.Cd => Some(Cd(tail))
-                case Builtin.Ls => Some(Ls)
+                case Builtin.Exit => Success(Exit)
+                case Builtin.Echo => Success(Echo(tail))
+                case Builtin.Pwd  => Success(Pwd)
+                case Builtin.Type => Success(Type(tail))
+                case Builtin.Cd   => Success(Cd(tail))
+                case Builtin.Ls   => Success(Ls)
                 case Builtin.Complete =>
                   tail match {
                     case "-p" :: cmd :: Nil =>
-                      Some(Complete(PrintSpec(cmd)))
+                      Success(Complete(PrintSpec(cmd)))
                     case "-C" :: path :: cmd :: Nil =>
-                      Some(Complete(RegisterSpec(path, cmd)))
+                      Success(Complete(RegisterSpec(path, cmd)))
                     case "-r" :: cmd :: Nil =>
-                      Some(Complete(UnregisterSpec(cmd)))
-                    case _ => None
+                      Success(Complete(UnregisterSpec(cmd)))
+                    case _ => Fail(ParseError.MissingArguments(s"Unrecognized arguments for Complete"))
                   }
-                case Builtin.Jobs => Some(Jobs)
+                case Builtin.Jobs => Success(Jobs)
                 case Builtin.History => 
                   tail match {
-                    case "-r" :: file :: Nil => Some(History(ReadFromFile(file)))
-                    case "-w" :: file :: Nil => Some(History(WriteToFile(file)))
-                    case "-a" :: file :: Nil => Some(History(AppendToFile(file)))
+                    case "-r" :: file :: Nil => Success(History(ReadFromFile(file)))
+                    case "-w" :: file :: Nil => Success(History(WriteToFile(file)))
+                    case "-a" :: file :: Nil => Success(History(AppendToFile(file)))
                     case n :: Nil => n.toIntOption match {
-                      case Some(number) => Some(History(NHistory(number)))
-                      case None => None
+                      case Some(number) => Success(History(NHistory(number)))
+                      case None => Fail(ParseError.MissingArguments("Unrecognized argument for History"))
                     }
-                    case Nil => Some(History(ShowAll))
-                    case _ => None
+                    case Nil => Success(History(ShowAll))
+                    case _ => Fail(ParseError.MissingArguments("Unrecognized arguments for History"))
                   }
                 case Builtin.Declare =>
                   tail match {
-                    case "-p" :: variable :: Nil => Some(Declare(PrintVariable(variable)))
+                    case "-p" :: variable :: Nil => Success(Declare(PrintVariable(variable)))
                     case assignment :: Nil if assignment.contains("=") =>
                       val Array(name, value) = assignment.split("=")
-                      System.out.print(s"Printing: $name = $value")
-                      Some(Declare(AssignVariable(name, value)))
+                      //System.out.print(s"Printing: $name = $value")
+                      Success(Declare(AssignVariable(name, value)))
                       
-                    case _ => None
+                    case _ => Fail(ParseError.MissingArguments(s"Unrecognized arguments for Declare"))
                   }
 
               }
@@ -97,13 +98,13 @@ object Parser {
                 case Some(op) => op match {
                   case FunctionalOp.Filter  => 
                     parseExpr(tail) match {
-                      case Some(expr) => Some(Filter(expr))
-                      case None => None
+                      case Success(expr)  => Success(Filter(expr))
+                      case Fail(err)      => Fail(err)
                     }
                   case FunctionalOp.Map     => 
                     parseExpr(tail) match {
-                      case Some(expr) => Some(Map(expr))
-                      case None => None
+                      case Success(expr)  => Success(Map(expr))
+                      case Fail(err)      => Fail(err)
                     }
                   // case FunctionalOp.Sort    => 
                   //   parseExpr(tail) match {
@@ -112,7 +113,7 @@ object Parser {
                   //   }
                 }
               
-                case _ => Some(External(head, tail))
+                case _ => Success(External(head, tail))
               }
             }
         }
@@ -121,10 +122,10 @@ object Parser {
     }
   }
 
-  def parseExpr(tokens: List[String]): Option[Expr] = tokens match {
+  def parseExpr(tokens: List[String]): Result[ParseError, Expr] = tokens match {
 
     case prop :: Nil if prop.startsWith("_.") =>
-      Some(Expr.PropAccess(prop.stripPrefix("_.")))
+      Success(Expr.PropAccess(prop.stripPrefix("_.")))
 
     case prop :: op :: value :: Nil if prop.startsWith("_.") =>
       val field = prop.stripPrefix("_.")
@@ -141,11 +142,12 @@ object Parser {
       }
 
       op match {
-        case "gt" => Some(Expr.GreaterThan(left, right))
-        case "eq" => Some(Expr.Equals(left, right))
-        case _ => None
+        case "gt" => Success(Expr.GreaterThan(left, right))
+        case "eq" => Success(Expr.Equals(left, right))
+        case _ => Fail(ParseError.UnknownOperator(s"Unknown operatoe: $op. Expected gt, lt or eq"))
       }
-    case _ => None
+
+    case _ => Fail(ParseError.InvalidSyntax(s"Wrong syntax"))
   }
 
   def parseByteSize(value: String): Option[Long] = {
