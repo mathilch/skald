@@ -197,10 +197,12 @@ object Executor {
   }
 
   private def valueToData(v: ShellValue): Option[ShellData] = v match {
-    case ShellValue.VLong(l)     => Some(ShellData.Text(l.toString))
-    case ShellValue.VString(s)   => Some(ShellData.Text(s))
-    case ShellValue.VBool(b)     => Some(ShellData.Text(b.toString))
-    case ShellValue.VNone        => None 
+    case ShellValue.VLong(l)    => Some(ShellData.Text(l.toString))
+    case ShellValue.VString(s)  => Some(ShellData.Text(s))
+    case ShellValue.VBool(b)    => Some(ShellData.Text(b.toString))
+    case ShellValue.VDate(d)    => Some(ShellData.Text(d.toString))
+    case ShellValue.VTime(t)    => Some(ShellData.Text(t.toString))
+    case ShellValue.VNone       => None 
   }
 
   private def executeChain(
