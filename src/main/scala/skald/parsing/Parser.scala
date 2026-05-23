@@ -57,6 +57,7 @@ object Parser {
                 case Builtin.Pwd => Some(Pwd)
                 case Builtin.Type => Some(Type(tail))
                 case Builtin.Cd => Some(Cd(tail))
+                case Builtin.Ls => Some(Ls)
                 case Builtin.Complete =>
                   tail match {
                     case "-p" :: cmd :: Nil =>
@@ -94,9 +95,21 @@ object Parser {
               }
               case None => FunctionalOp.fromString(head) match {
                 case Some(op) => op match {
-                  case FunctionalOp.Filter  => ???
-                  case FunctionalOp.Map     => ???
-                  case FunctionalOp.Sort    => ???
+                  case FunctionalOp.Filter  => 
+                    parseExpr(tail) match {
+                      case Some(expr) => Some(Filter(expr))
+                      case None => None
+                    }
+                  case FunctionalOp.Map     => 
+                    parseExpr(tail) match {
+                      case Some(expr) => Some(Map(expr))
+                      case None => None
+                    }
+                  // case FunctionalOp.Sort    => 
+                  //   parseExpr(tail) match {
+                  //     case Some(expr) => Some(Sort(expr))
+                  //     case None => None
+                  //   }
                 }
               
                 case _ => Some(External(head, tail))
@@ -108,6 +121,64 @@ object Parser {
     }
   }
 
-  private def parseExpr(tokens: List[String]): Option[String] = ???
+  def parseExpr(tokens: List[String]): Option[Expr] = tokens match {
+
+    case prop :: Nil if prop.startsWith("_.") =>
+      Some(Expr.PropAccess(prop.stripPrefix("_.")))
+
+    case prop :: op :: value :: Nil if prop.startsWith("_.") =>
+      val field = prop.stripPrefix("_.")
+      val left = Expr.PropAccess(field)
+
+      val right = parseByteSize(value) match {
+        case Some(num) => Expr.LitInt(num)
+        case None      => value.toBooleanOption match {
+          case Some(b) => Expr.LitBool(b)
+          case None => Expr.LitStr(value)
+        }
+
+          
+      }
+
+      op match {
+        case "gt" => Some(Expr.GreaterThan(left, right))
+        case "eq" => Some(Expr.Equals(left, right))
+        case _ => None
+      }
+    case _ => None
+  }
+
+  def parseByteSize(value: String): Option[Long] = {
+    // Fanger et valgfrit minus, derefter tal, og til sidst valgfri bogstaver
+    val sizeRegex = """^(-?\d+)([a-zA-Z]+)?$""".r
+
+    value match {
+      case sizeRegex(numStr, null) => 
+        // Der var ingen enhed (f.eks. "100"), så det er bare bytes
+        numStr.toLongOption
+
+      case sizeRegex(numStr, suffix) =>
+        // Vi har både tal og enhed (f.eks. "100", "mib")
+        for {
+          num <- numStr.toLongOption
+          multiplier <- suffix.toLowerCase match {
+            case "b"   => Some(1L)
+            // SI standard (powers of 10)
+            case "kb"  => Some(1000L)
+            case "mb"  => Some(1000000L)
+            case "gb"  => Some(1000000000L)
+            case "tb"  => Some(1000000000000L)
+            // IEC standard (powers of 2)
+            case "kib" => Some(1024L)
+            case "mib" => Some(1048576L)
+            case "gib" => Some(1073741824L)
+            case "tib" => Some(1099511627776L)
+            case _     => None // Ukendt enhed (f.eks. "100xx")
+          }
+        } yield num * multiplier
+
+      case _ => None // Matcher slet ikke (f.eks. ren tekst som "foo")
+    }
+  }
 }
 

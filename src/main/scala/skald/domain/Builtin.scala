@@ -6,6 +6,7 @@ enum Builtin(val name: String):
   case Type     extends Builtin("type")
   case Pwd      extends Builtin("pwd")
   case Cd       extends Builtin("cd")
+  case Ls       extends Builtin("ls")
   case Complete extends Builtin("complete")
   case Jobs     extends Builtin("jobs")
   case History  extends Builtin("history")

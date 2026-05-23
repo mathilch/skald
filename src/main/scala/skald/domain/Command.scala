@@ -6,6 +6,7 @@ enum Command:
   case Pwd
   case Type(args: List[String])
   case Cd(args: List[String])
+  case Ls
   case Complete(arg: CompleteFlag)
   case Jobs
   case History(arg: HistoryFlag)
@@ -14,6 +15,9 @@ enum Command:
   case Pipeline(commands: List[Command])
   case Redirect(cmd: Command, target: RedirectionType, mode: RedirectionMode, targetFile: String)
   case Subprocess(cmd: Command)
+
+  case Filter(expr: Expr)
+  case Map(expr: Expr)
 
 enum DeclareFlag:
   case PrintVariable(variable: String)

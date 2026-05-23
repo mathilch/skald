@@ -13,5 +13,6 @@
 - [ ] Forbedret fejl håndtering, måske modellér med ADT's?
 - [ ] inline suggestions ligesom zsh-autosuggestions
 - [ ] Eget scripting sprog?
-- [ ] Smartere pipes, f.eks. implementer filter og map kommandoer e.g., ls | filter(_.size > 10mb) | map(_.name)
+- [x] Smartere pipes, f.eks. implementer filter og map kommandoer e.g., ls | filter(_.size > 10mb) | map(_.name). 
+      Mangler stadig flere operationer: indtil videre filter, map på gt og eq
 

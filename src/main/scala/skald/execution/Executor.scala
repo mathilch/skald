@@ -45,10 +45,17 @@ object Executor {
         case Left(err)      => (ExecutionResult(Iterator.empty, stderr = err + "\n", 1), env)
       }
 
+    case Ls =>
+      import scala.jdk.CollectionConverters.*
+      val fileNodes = JFiles.list(env.cwd).iterator().asScala.map { path =>
+        ShellData.FileNode(path)
+      }
+      (ExecutionResult(fileNodes), env)
+
     case Type(args) => 
       val out = handleType(args.headOption.getOrElse(""))
       val data = Iterator(ShellData.Text(out))
-      (ExecutionResult(Iterator.empty), env)
+      (ExecutionResult(data), env)
 
     case Complete(args) =>
       args match {
@@ -170,6 +177,30 @@ object Executor {
         case Stdout => (res.copy(output = Iterator.empty), nextEnv)
         case Stderr => (res.copy(stderr = ""), nextEnv)
       }
+
+    case Filter(expr) => 
+      val filteredStream = stdin.filter { item =>
+        evalExpr(expr, item) match {
+          case ShellValue.VBool(true) => true
+          case _                      => false
+        }
+      }
+      (ExecutionResult(filteredStream), env)
+
+    case Map(expr) => 
+      val mappedStream = stdin.flatMap { item =>
+        val evaluatedValue = evalExpr(expr, item)
+        valueToData(evaluatedValue)
+      }
+      (ExecutionResult(mappedStream), env)
+
+  }
+
+  private def valueToData(v: ShellValue): Option[ShellData] = v match {
+    case ShellValue.VLong(l)     => Some(ShellData.Text(l.toString))
+    case ShellValue.VString(s)   => Some(ShellData.Text(s))
+    case ShellValue.VBool(b)     => Some(ShellData.Text(b.toString))
+    case ShellValue.VNone        => None 
   }
 
   private def executeChain(
