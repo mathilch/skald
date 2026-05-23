@@ -143,6 +143,7 @@ object Parser {
 
       op match {
         case "gt" => Success(Expr.GreaterThan(left, right))
+        case "lt" => Success(Expr.LesserThan(left, right))
         case "eq" => Success(Expr.Equals(left, right))
         case _ => Fail(ParseError.UnknownOperator(s"Unknown operatoe: $op. Expected gt, lt or eq"))
       }

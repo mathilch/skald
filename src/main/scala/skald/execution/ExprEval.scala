@@ -14,45 +14,40 @@ def evalExpr(expr: Expr, data: ShellData): ShellValue = expr match {
   case Expr.PropAccess(f) => data.getProperty(f).getOrElse(ShellValue.VNone)
 
   case Expr.GreaterThan(left, right) =>
-    (evalExpr(left, data), evalExpr(right, data)) match {
-      case (ShellValue.VLong(l), ShellValue.VLong(r))     => ShellValue.VBool(l > r)
-      case (ShellValue.VString(l), ShellValue.VString(r)) => ShellValue.VBool(l.compareTo(r) > 0)
- 
-      case (ShellValue.VDate(l), ShellValue.VDate(r)) => ShellValue.VBool(l.isAfter(r))
-      case (ShellValue.VTime(l), ShellValue.VTime(r)) => ShellValue.VBool(l.isAfter(r))
+    compareValues(evalExpr(left, data), evalExpr(right, data)) match {
+      case Some(res) => ShellValue.VBool(res > 0)
+      case None      => ShellValue.VNone
+    }
 
-      case (ShellValue.VDate(l), ShellValue.VString(rStr)) =>
-        Try(LocalDate.parse(rStr))
-          .map(rDate => ShellValue.VBool(l.isAfter(rDate)))
-          .getOrElse(ShellValue.VBool(false))
-
-      case (ShellValue.VTime(l), ShellValue.VString(rStr)) =>
-        Try(LocalTime.parse(rStr))
-          .map(rTime => ShellValue.VBool(l.isAfter(rTime)))
-          .getOrElse(ShellValue.VBool(false))
-
-      case _ => ShellValue.VNone 
+  case Expr.LesserThan(left, right) =>
+    compareValues(evalExpr(left, data), evalExpr(right, data)) match {
+      case Some(res) => ShellValue.VBool(res < 0)
+      case None      => ShellValue.VNone
     }
 
   case Expr.Equals(left, right) =>
-    (evalExpr(left, data), evalExpr(right, data)) match {
-      case (ShellValue.VLong(l), ShellValue.VLong(r))     => ShellValue.VBool(l == r)
-      case (ShellValue.VString(l), ShellValue.VString(r)) => ShellValue.VBool(l == r)
-      case (ShellValue.VBool(l), ShellValue.VBool(r))     => ShellValue.VBool(l == r)
-
-      case (ShellValue.VDate(l), ShellValue.VDate(r))     => ShellValue.VBool(l.equals(r))
-      case (ShellValue.VTime(l), ShellValue.VTime(r))     => ShellValue.VBool(l.equals(r))
-
-      case (ShellValue.VDate(l), ShellValue.VString(rStr)) =>
-        Try(LocalDate.parse(rStr))
-          .map(rDate => ShellValue.VBool(l == rDate))
-          .getOrElse(ShellValue.VBool(false))
-
-      case (ShellValue.VTime(l), ShellValue.VString(rStr)) =>
-        Try(LocalTime.parse(rStr))
-          .map(rTime => ShellValue.VBool(l == rTime))
-          .getOrElse(ShellValue.VBool(false))
-
-      case _ => ShellValue.VBool(false)
+    compareValues(evalExpr(left, data), evalExpr(right, data)) match {
+      case Some(res) => ShellValue.VBool(res == 0)
+      case None      => ShellValue.VBool(false) // equals failer normalt bare til false
     }
+}
+
+private def compareValues(leftVal: ShellValue, rightVal: ShellValue): Option[Int] = (leftVal, rightVal) match {
+  case (ShellValue.VLong(l), ShellValue.VLong(r))     => Some(l.compareTo(r))
+  case (ShellValue.VString(l), ShellValue.VString(r)) => Some(l.compareTo(r))
+  case (ShellValue.VBool(l), ShellValue.VBool(r))     => Some(l.compareTo(r))
+
+  // Dato og tid
+  case (ShellValue.VDate(l), ShellValue.VDate(r))     => Some(l.compareTo(r))
+  case (ShellValue.VTime(l), ShellValue.VTime(r))     => Some(l.compareTo(r))
+
+  // Smart Coercion for Dato
+  case (ShellValue.VDate(l), ShellValue.VString(rStr)) =>
+    Try(LocalDate.parse(rStr)).toOption.map(rDate => l.compareTo(rDate))
+
+  // Smart Coercion for Tid
+  case (ShellValue.VTime(l), ShellValue.VString(rStr)) =>
+    Try(LocalTime.parse(rStr)).toOption.map(rTime => l.compareTo(rTime))
+
+  case _ => None // Ugyldig sammenligning
 }

@@ -7,4 +7,5 @@ enum Expr:
   case LitBool(value: Boolean)
 
   case GreaterThan(left: Expr, right: Expr)
+  case LesserThan(left: Expr, right: Expr)
   case Equals(left: Expr, right: Expr)
