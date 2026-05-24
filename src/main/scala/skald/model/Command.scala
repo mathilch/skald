@@ -20,6 +20,13 @@ enum Command:
   case Map(expr: Expr)
   case Sort(expr: Expr, descending: Boolean = false)
 
+  case Alias(arg: AliasFlag)
+  case Unalias(name: String)
+
+enum AliasFlag:
+  case PrintAll
+  case AssignAlias(variable: String, value: String)
+
 enum DeclareFlag:
   case PrintVariable(variable: String)
   case AssignVariable(variable: String, value: String)

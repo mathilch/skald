@@ -6,6 +6,7 @@ import RedirectionMode._
 import CompleteFlag._
 import DeclareFlag._
 import HistoryFlag._
+import AliasFlag._
 
 import java.io.File
 import java.nio.file.{Path => JPath, Paths, Files => JFiles}
@@ -111,7 +112,7 @@ object Executor {
     case Declare(arg) =>
       arg match {
         case PrintVariable(variable) => 
-          val res = env.format(variable).fold(
+          val res = env.formatVariable(variable).fold(
             err => {
               val outerr = err + "\n"
               ExecutionResult(Iterator.empty, stderr = outerr, exitCode = 1)
@@ -205,6 +206,25 @@ object Executor {
         }
       }.iterator
       (ExecutionResult(sortedStream), env)
+
+    case Alias(arg) =>
+      arg match {
+        case AssignAlias(name, value) =>
+          val nextEnv = env.setAlias(name, value)
+          (ExecutionResult(Iterator.empty), nextEnv)
+        case PrintAll => 
+          val aliasList = env.aliases.map { case (name, value) =>
+            ShellData.Text(s"$name='$value'")
+          }.iterator
+
+          (ExecutionResult(aliasList), env)
+      }
+      
+    case Unalias(name) => 
+      env.removeAlias(name) match {
+        case None => (ExecutionResult(stderr = s"no alias with name $name"), env)
+        case Some(nextEnv) => (ExecutionResult(Iterator.empty), nextEnv)
+      }
   }
 
   private def valueToData(v: ShellValue): Option[ShellData] = v match {

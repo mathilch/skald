@@ -56,7 +56,7 @@ object Main extends App {
         } 
         else if (cmdLine.nonEmpty) {
           val tokens = Lexer.tokenizeInput(cmdLine)
-          Parser.parse(tokens) match {
+          Parser.parse(tokens, env.aliases) match {
             case Success(command) => {
               HistoryManager.addCommand(cmdLine)
               val (res, nextEnv) = Executor.evaluate(command, env)

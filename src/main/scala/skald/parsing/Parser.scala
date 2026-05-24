@@ -1,18 +1,19 @@
 package skald 
 
-import Command._
+import Command.{Map => MapCmd, _}
 import RedirectionType._
 import RedirectionMode._
 import CompleteFlag._
 import DeclareFlag._
 import HistoryFlag._
 import Result._
+import AliasFlag._
 
 object Parser {
-  def parse(tokens: List[String]): Result[ParseError, Command] = {
+  def parse(tokens: List[String], aliases: Map[String, String] = Map.empty): Result[ParseError, Command] = {
     if (tokens.last == "&") {
       val cmd = tokens.init
-      return parse(cmd).map(process => Subprocess(process))
+      return parse(cmd, aliases).map(process => Subprocess(process))
     }
 
     val redirectTokens = Set(">", "1>", "2>", ">>", "1>>", "2>>")
@@ -24,7 +25,7 @@ object Parser {
       val right = tokens.lift(rIdx + 1).getOrElse("")
       val op = tokens(rIdx)
 
-      parse(left).map { cmd =>
+      parse(left, aliases).map { cmd =>
         val (target, mode) = op match {
           case "1>>" | ">>" => (Stdout, Append)
           case "2>>"        => (Stderr, Append)
@@ -44,79 +45,96 @@ object Parser {
           }
         }.map(_.reverse).reverse
 
-        return segments.map(parse).sequence.map(Pipeline.apply)
-
+        return segments.map(s => parse(s, aliases)).sequence.map(Pipeline.apply)
+  
       } else {
         // Hvis > ikke eksistere
         tokens match {
           case Nil => Fail(ParseError.MissingArguments(s"Nothing"))
-          case head :: tail =>
-            Builtin.fromString(head) match {
-              case Some(b) => b match {
-                case Builtin.Exit => Success(Exit)
-                case Builtin.Echo => Success(Echo(tail))
-                case Builtin.Pwd  => Success(Pwd)
-                case Builtin.Type => Success(Type(tail))
-                case Builtin.Cd   => Success(Cd(tail))
-                case Builtin.Ls   => Success(Ls)
-                case Builtin.Complete =>
-                  tail match {
-                    case "-p" :: cmd :: Nil =>
-                      Success(Complete(PrintSpec(cmd)))
-                    case "-C" :: path :: cmd :: Nil =>
-                      Success(Complete(RegisterSpec(path, cmd)))
-                    case "-r" :: cmd :: Nil =>
-                      Success(Complete(UnregisterSpec(cmd)))
-                    case _ => Fail(ParseError.MissingArguments(s"Unrecognized arguments for Complete"))
-                  }
-                case Builtin.Jobs => Success(Jobs)
-                case Builtin.History => 
-                  tail match {
-                    case "-r" :: file :: Nil => Success(History(ReadFromFile(file)))
-                    case "-w" :: file :: Nil => Success(History(WriteToFile(file)))
-                    case "-a" :: file :: Nil => Success(History(AppendToFile(file)))
-                    case n :: Nil => n.toIntOption match {
-                      case Some(number) => Success(History(NHistory(number)))
-                      case None => Fail(ParseError.MissingArguments("Unrecognized argument for History"))
-                    }
-                    case Nil => Success(History(ShowAll))
-                    case _ => Fail(ParseError.MissingArguments("Unrecognized arguments for History"))
-                  }
-                case Builtin.Declare =>
-                  tail match {
-                    case "-p" :: variable :: Nil => Success(Declare(PrintVariable(variable)))
-                    case assignment :: Nil if assignment.contains("=") =>
-                      val Array(name, value) = assignment.split("=")
-                      //System.out.print(s"Printing: $name = $value")
-                      Success(Declare(AssignVariable(name, value)))
-                      
-                    case _ => Fail(ParseError.MissingArguments(s"Unrecognized arguments for Declare"))
-                  }
-
-              }
-              case None => FunctionalOp.fromString(head) match {
-                case Some(op) => op match {
-                  case FunctionalOp.Filter=> 
-                    parseExpr(tail) match {
-                      case Success(expr)  => Success(Filter(expr))
-                      case Fail(err)      => Fail(err)
-                    }
-                  case FunctionalOp.Map => 
-                    parseExpr(tail) match {
-                      case Success(expr)  => Success(Map(expr))
-                      case Fail(err)      => Fail(err)
-                    }
-                  case FunctionalOp.Sort => 
-                    parseExpr(tail) match {
-                      case Success(expr)  => Success(Sort(expr))
-                      case Fail(err)      => Fail(err)
-                    }
-                }
-              
-                case _ => Success(External(head, tail))
-              }
+          case h :: t =>
+            val resolvedTokens = aliases.get(h) match {
+              case Some(aliasValue) => Lexer.tokenizeInput(aliasValue) ++ t
+              case None => tokens
             }
-        }
+
+            resolvedTokens match {
+              case Nil => Fail(ParseError.MissingArguments(s"Empty alias"))
+              case head :: tail =>
+                Builtin.fromString(head) match {
+                  case Some(b) => b match {
+                    case Builtin.Exit => Success(Exit)
+                    case Builtin.Echo => Success(Echo(tail))
+                    case Builtin.Pwd  => Success(Pwd)
+                    case Builtin.Type => Success(Type(tail))
+                    case Builtin.Cd   => Success(Cd(tail))
+                    case Builtin.Ls   => Success(Ls)
+                    case Builtin.Complete =>
+                      tail match {
+                        case "-p" :: cmd :: Nil => Success(Complete(PrintSpec(cmd)))
+                        case "-C" :: path :: cmd :: Nil => Success(Complete(RegisterSpec(path, cmd)))
+                        case "-r" :: cmd :: Nil => Success(Complete(UnregisterSpec(cmd)))
+                        case _ => Fail(ParseError.MissingArguments(s"Unrecognized arguments for Complete"))
+                      }
+                    case Builtin.Jobs => Success(Jobs)
+                    case Builtin.History =>
+                      tail match {
+                        case "-r" :: file :: Nil => Success(History(ReadFromFile(file)))
+                        case "-w" :: file :: Nil => Success(History(WriteToFile(file)))
+                        case "-a" :: file :: Nil => Success(History(AppendToFile(file)))
+                        case n :: Nil => n.toIntOption match {
+                          case Some(number) => Success(History(NHistory(number)))
+                          case None => Fail(ParseError.MissingArguments("Unrecognized argument for History"))
+                        }
+                        case Nil => Success(History(ShowAll))
+                        case _ => Fail(ParseError.MissingArguments("Unrecognized arguments for History"))
+                      }
+                    case Builtin.Declare =>
+                      tail match {
+                        case "-p" :: variable :: Nil => Success(Declare(PrintVariable(variable)))
+                        case assignment :: Nil if assignment.contains("=") =>
+                          val Array(name, value) = assignment.split("=", 2)
+                          Success(Declare(AssignVariable(name, value)))
+                        case _ => Fail(ParseError.MissingArguments(s"Unrecognized arguments for Declare"))
+                      }
+                    case Builtin.Alias =>
+                      tail match {
+                        case Nil => Success(Alias(PrintAll))
+                        case assignment :: Nil if assignment.contains("=") =>
+                          val Array(name, value) = assignment.split("=", 2)
+                          val cleanValue = value.stripPrefix("\"").stripSuffix("\"").stripPrefix("\'").stripSuffix("\'")
+                          Success(Alias(AssignAlias(name, cleanValue)))
+                        case _ => Fail(ParseError.InvalidSyntax(s"use: alias name=\"value\" to create an alias"))
+                      }
+                    case Builtin.Unalias =>
+                      tail match {
+                        case name :: Nil => Success(Unalias(name))
+                        case _ => Fail(ParseError.InvalidSyntax("use: unalias name"))
+                      }
+                  } // Slut på Builtin match
+
+                  case None => FunctionalOp.fromString(head) match {
+                    case Some(op) => op match {
+                      case FunctionalOp.Filter =>
+                        parseExpr(tail) match {
+                          case Success(expr) => Success(Filter(expr))
+                          case Fail(err)     => Fail(err)
+                        }
+                      case FunctionalOp.Map => // Bruger din MapCmd her
+                        parseExpr(tail) match {
+                          case Success(expr) => Success(skald.Command.Map(expr))
+                          case Fail(err)     => Fail(err)
+                        }
+                      case FunctionalOp.Sort =>
+                        parseExpr(tail) match {
+                          case Success(expr) => Success(Sort(expr, false))
+                          case Fail(err)     => Fail(err)
+                        }
+                    } // Slut på op match
+                    case None => Success(External(head, tail))
+                  } // Slut på FunctionalOp match
+                } // Slut på Builtin.fromString(head) match
+            } // Slut på resolvedTokens match
+        } // Slut på tokens match
       }
 
     }

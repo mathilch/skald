@@ -9,7 +9,6 @@ object FunctionalOp:
     case "filter" => Some(Filter)
     case "map"    => Some(Map)
     case "sort"   => Some(Sort)
-    //case "sort"   => Some(Sort)
     case _        => None
   }
 

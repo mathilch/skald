@@ -28,11 +28,11 @@ def evalExpr(expr: Expr, data: ShellData): ShellValue = expr match {
   case Expr.Equals(left, right) =>
     compareValues(evalExpr(left, data), evalExpr(right, data)) match {
       case Some(res) => ShellValue.VBool(res == 0)
-      case None      => ShellValue.VBool(false) // equals failer normalt bare til false
+      case None      => ShellValue.VBool(false) 
     }
 }
 
-private def compareValues(leftVal: ShellValue, rightVal: ShellValue): Option[Int] = (leftVal, rightVal) match {
+def compareValues(leftVal: ShellValue, rightVal: ShellValue): Option[Int] = (leftVal, rightVal) match {
   case (ShellValue.VLong(l), ShellValue.VLong(r))     => Some(l.compareTo(r))
   case (ShellValue.VString(l), ShellValue.VString(r)) => Some(l.compareTo(r))
   case (ShellValue.VBool(l), ShellValue.VBool(r))     => Some(l.compareTo(r))
