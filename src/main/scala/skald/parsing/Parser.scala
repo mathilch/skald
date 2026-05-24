@@ -96,6 +96,13 @@ object Parser {
                           Success(Declare(AssignVariable(name, value)))
                         case _ => Fail(ParseError.MissingArguments(s"Unrecognized arguments for Declare"))
                       }
+                    case Builtin.Export => 
+                      tail match {
+                        case assignment :: Nil if assignment.contains("=") =>
+                          val Array(name, value) = assignment.split("=", 2)
+                          Success(Declare(AssignVariable(name, value)))
+                        case _ => Fail(ParseError.MissingArguments(s"Unrecognized arguments for Export"))
+                      } 
                     case Builtin.Alias =>
                       tail match {
                         case Nil => Success(Alias(PrintAll))

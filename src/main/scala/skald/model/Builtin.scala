@@ -11,6 +11,7 @@ enum Builtin(val name: String):
   case Jobs     extends Builtin("jobs")
   case History  extends Builtin("history")
   case Declare  extends Builtin("declare")
+  case Export   extends Builtin("export")
   case Alias    extends Builtin("alias")
   case Unalias  extends Builtin("unalias")
   case Source   extends Builtin("source")

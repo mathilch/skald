@@ -115,7 +115,7 @@ object Executor {
               ExecutionResult(Iterator.empty, stderr = outerr, exitCode = 1)
             },
             out => {
-              val outstr = out + "\n"
+              val outstr = out + "\n" //Nødvendigt? tror ik TODO
               val data = Iterator(ShellData.Text(outstr))
               ExecutionResult(data)
             }
@@ -123,33 +123,42 @@ object Executor {
           (res, env)
         
         case AssignVariable(variable, value) =>
-          val nextEnv = env.setVariable(variable, value)
+          val nextEnv = env.setVariable(variable, value, VarScope.Local)
           (ExecutionResult(Iterator.empty), nextEnv)
       }
+
+    case Export(name, value) =>
+      val nextEnv = env.setVariable(name, value, VarScope.Global)
+      (ExecutionResult(Iterator.empty), nextEnv)
 
     case Subprocess(cmd) =>
       val jobId = JobManager.nextJobId
 
       cmd match {
         case External(name, args) =>
-          val pb = new java.lang.ProcessBuilder((name :: args)*)
-          pb.directory(env.cwd.toFile())
-          pb.inheritIO()
-          val process = pb.start()
-          val pid = process.pid()
+          createProcessBuilder(name, args, env) match {
+            case Some(pb) =>
+              pb.inheritIO()
+              val process = pb.start()
+              val pid = process.pid()
 
-          val cmdLine = s"$name ${args.mkString(" ")}"
-          val newJob = BackgroundJob(jobId, pid, cmdLine, process)
-          JobManager.addJob(newJob)
+              val cmdLine = s"$name ${args.mkString(" ")}"
+              val newJob = BackgroundJob(jobId, pid, cmdLine, process)
+              JobManager.addJob(newJob)
 
-          System.out.println(s"[$jobId] $pid")
-          val data = Iterator(ShellData.ProcessInfo(pid.toInt, cmdLine))
-          (ExecutionResult(data), env)
+              System.out.println(s"[$jobId] $pid")
+              val data = Iterator(ShellData.ProcessInfo(pid.toInt, cmdLine))
+              (ExecutionResult(data), env)
+            case None =>
+              System.err.println(s"$name: not found")
+              (ExecutionResult(Iterator.empty, exitCode = 127), env)
+          }
         case _ =>
           System.out.println(s"[$jobId] (builtin)")
           new Thread(() => run(cmd, env)).start()
           val data = Iterator(ShellData.ProcessInfo(0, "(builtin)"))
           (ExecutionResult(data), env)
+          
       }
 
     case External(name, args) => 
@@ -259,11 +268,9 @@ object Executor {
    * output fra venstre led
   */
   private def runExternal(name: String, args: List[String], env: ShellEnv, stdin: Iterator[ShellData]): ExecutionResult = {
-    Path.findInPath(name) match {
-      case Some(fullPath) =>
-
-        val pb = new java.lang.ProcessBuilder((name :: args)*)
-        pb.directory(env.cwd.toFile)
+    
+    createProcessBuilder(name, args, env) match {
+      case Some(pb) =>
         val process = pb.start()
 
         if (stdin.nonEmpty) {
@@ -301,6 +308,22 @@ object Executor {
 
       case None => 
         ExecutionResult(Iterator(ShellData.Text(s"$name: not found")), exitCode = 127)
+    }
+  }
+
+  private def createProcessBuilder(name: String, args: List[String], env: ShellEnv): Option[java.lang.ProcessBuilder] = {
+    Path.findInPath(name).map { fullPath =>
+      val pb = new java.lang.ProcessBuilder((fullPath.toString :: args)*)
+      pb.directory(env.cwd.toFile)
+
+      // Indsæt eksporterede variabler i processens miljø
+      val pbEnv = pb.environment()
+      env.variables.foreach { case (key, shellVar) =>
+        if (shellVar.scope == VarScope.Global) {
+          pbEnv.put(key, shellVar.value)
+        }
+      }
+      pb
     }
   }
 

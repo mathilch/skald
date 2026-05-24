@@ -10,7 +10,10 @@ enum Command:
   case Complete(arg: CompleteFlag)
   case Jobs
   case History(arg: HistoryFlag)
+
   case Declare(arg: DeclareFlag)
+  case Export(name: String, value: String)
+
   case External(name: String, args: List[String])
   case Pipeline(commands: List[Command])
   case Redirect(cmd: Command, target: RedirectionType, mode: RedirectionMode, targetFile: String)

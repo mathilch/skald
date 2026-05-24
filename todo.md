@@ -4,7 +4,8 @@
 - [ ] Fiks terminal wrapping
 - [ ] Regex på declare variabel navn
 - [ ] Tests over hele linjen
-- [ ] Alias
+- [x] Alias
+- [ ] Export
 - [ ] SIGINT
 - [ ] Prompt konfig 
 - [ ] Miljø, e.g. python til prompt
@@ -19,3 +20,6 @@
       accessed, modified skal kunne vælge imellem -t time, -d for date og ingen flags for datetime
 - [ ] Tilføj standard flags til ls. Overvej at skjul hidden files ved ls bare
 - [ ] Farve highlighted builtin keyword og externals
+
+
+- [ ] ordentlig README
