@@ -23,7 +23,7 @@ object Files {
 
   def writeToFile(file: String, content: String): Unit = {
     JFiles.write(
-      Paths.get(file), 
+      Paths.get(expandPath(file)), 
       content.getBytes, 
       StandardOpenOption.CREATE, 
       StandardOpenOption.TRUNCATE_EXISTING)
@@ -32,7 +32,7 @@ object Files {
   def readFromFile(file: String): List[String] = {
     import scala.jdk.CollectionConverters._
 
-    val path = Paths.get(file)
+    val path = Paths.get(expandPath(file))
     if (JFiles.exists(path)) JFiles.readAllLines(path).asScala.map(_.trim()).filter(_.nonEmpty).toList
     else List.empty[String]  
   }
@@ -41,7 +41,7 @@ object Files {
     val lineWithSeperator = if content.nonEmpty then content + "\n" else ""
 
     JFiles.write(
-      Paths.get(file), 
+      Paths.get(expandPath(file)), 
       content.getBytes, 
       StandardOpenOption.CREATE, 
       StandardOpenOption.APPEND)
@@ -51,10 +51,19 @@ object Files {
     val lineWithSeperator = if (content.endsWith("\n")) content else content + "\n"
 
     JFiles.write(
-      Paths.get(file), 
+      Paths.get(expandPath(file)), 
       lineWithSeperator.getBytes, 
       StandardOpenOption.CREATE, 
       StandardOpenOption.APPEND)
+  }
+
+  def expandPath(path: String): String = {
+    if (path.startsWith("~")) {
+      val home = System.getProperty("user.home")
+      path.replaceFirst("~", home)
+    } else {
+      path
+    }
   }
 
 }

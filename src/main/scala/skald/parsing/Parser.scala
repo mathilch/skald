@@ -167,7 +167,7 @@ object Parser {
     case _ => Fail(ParseError.InvalidSyntax(s"Wrong syntax"))
   }
 
-  def parseByteSize(value: String): Option[Long] = {
+  private def parseByteSize(value: String): Option[Long] = {
     // Fanger et valgfrit minus, derefter tal, og til sidst valgfri bogstaver
     val sizeRegex = """^(-?\d+)([a-zA-Z]+)?$""".r
 

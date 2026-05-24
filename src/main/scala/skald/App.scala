@@ -189,7 +189,9 @@ object Main extends App {
   try {
     Terminal.setRaw()
     HistoryManager.init()
-    loop(new StringBuilder())
+    val baseEnv = ShellEnv()
+    val startingEnv = ConfigLoader.loadRc(baseEnv)
+    loop(new StringBuilder(), env = startingEnv)
   } finally {
     Terminal.restore()
     HistoryManager.save()
