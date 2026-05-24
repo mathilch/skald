@@ -62,6 +62,11 @@ object HistoryManager {
     val width = totalCommands.toString.length
 
     s"%${width}d".format(idx + 1)
+
+
+  def getSuggestion(currentInput: String): Option[String] =
+    if (currentInput.isEmpty()) None
+    else history.find(_.startsWith(currentInput))
 }
 
 

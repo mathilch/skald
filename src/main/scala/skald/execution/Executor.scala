@@ -268,7 +268,6 @@ object Executor {
    * output fra venstre led
   */
   private def runExternal(name: String, args: List[String], env: ShellEnv, stdin: Iterator[ShellData]): ExecutionResult = {
-    
     createProcessBuilder(name, args, env) match {
       case Some(pb) =>
         val process = pb.start()
@@ -316,7 +315,6 @@ object Executor {
       val pb = new java.lang.ProcessBuilder((fullPath.toString :: args)*)
       pb.directory(env.cwd.toFile)
 
-      // Indsæt eksporterede variabler i processens miljø
       val pbEnv = pb.environment()
       env.variables.foreach { case (key, shellVar) =>
         if (shellVar.scope == VarScope.Global) {

@@ -3,7 +3,9 @@ package skald
 import java.io.Reader
 
 enum Key:
-  case UpArrow, DownArrow, LeftArrow, RightArrow, Enter, Tab, Backspace, Escape, CtrlC, CtrlD, Unknown
+  case UpArrow, DownArrow, LeftArrow, RightArrow
+  case Enter, Tab, Backspace, Escape, CtrlC, CtrlD, Unknown
+  case End, Home
   case CharKey(c: Char)
 
 object KeyReader {
@@ -25,6 +27,8 @@ object KeyReader {
             case (91, 66) => DownArrow
             case (91, 67) => RightArrow
             case (91, 68) => LeftArrow
+            case (91, 70) => End
+            //case (91, 72) => Home unused for now
             case _        => Escape 
           }
         } else Escape 

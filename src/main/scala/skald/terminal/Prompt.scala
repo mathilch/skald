@@ -4,16 +4,12 @@ import java.io.{File}
 import java.nio.file.Path
 import scala.sys.process._
 
-sealed trait Prompt
-object Prompt {
-  case class Static(text: StyledText) extends Prompt
-  case object CurrentDir extends Prompt 
-  case object GitBranch extends Prompt
-}
+enum Prompt:
+  case Static(text: StyledText)
+  case CurrentDir
+  case GitBranch
 
 object PromptEngine {
-  import java.nio.file.Path
-
   def render(env: ShellEnv): String = {
     val cwd = env.cwd 
     val dirName = if (cwd.toString == "/") "/" else cwd.getFileName.toString
@@ -33,7 +29,6 @@ object PromptEngine {
 
   private def getGitBranch(cwd: Path): Option[String] = {
     try {
-      import scala.sys.process.*
       val io = Process(Seq("git", "branch", "--show-current"), cwd.toFile)
         .lazyLines_!(ProcessLogger(_ => ()))
         

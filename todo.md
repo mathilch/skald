@@ -12,7 +12,8 @@
 - [ ] Exit code visning hvis forrige kommando fejler
 - [ ] Multi-line edits med \
 - [x] Forbedret fejl håndtering, måske modellér med ADT's? overkill?
-- [ ] inline suggestions ligesom zsh-autosuggestions
+- [x] inline suggestions ligesom zsh-autosuggestions
+- [ ] Fix tab autocompletions.
 - [ ] Eget scripting sprog?
 - [x] Smartere pipes, f.eks. implementer filter og map kommandoer e.g., ls | filter(_.size > 10mb) | map(_.name). 
       Mangler stadig flere operationer: indtil videre filter, map på gt og eq

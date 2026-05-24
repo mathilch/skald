@@ -24,7 +24,22 @@ object Main extends App {
       else cachedPrompt
 
     if (state.tabCount == 0) {
+      val currentInput = buffer.toString
+      val suggestionOpt = HistoryManager.getSuggestion(currentInput)
+
+      // 1. Ryd linjen, print prompt og det faktiske input
       System.out.print(s"\r\u001b[J$prompt$buffer")
+
+      // 2. Hvis vi har et forslag, og cursoren er for enden af inputtet, så tegn rest-delen
+      if (suggestionOpt.isDefined && state.cursorIdx == currentInput.length) {
+        val suggestion = suggestionOpt.get
+        val remainder = suggestion.substring(currentInput.length)
+        
+        // \u001b[90m = Lys grå (eller \u001b[38;5;8m). \u001b[0m = reset
+        System.out.print(s"\u001b[90m$remainder\u001b[0m")
+      }
+
+      // 3. Beregn, hvor cursoren FAKTISK skal være, og ryk den dertil.
       val visiblePromptLen = prompt.replaceAll("\u001b\\[[0-9;]*[a-zA-Z]", "").length
       val cursorCol = visiblePromptLen + state.cursorIdx + 1
       System.out.print(s"\u001b[${cursorCol}G")
@@ -39,7 +54,10 @@ object Main extends App {
 
       case Enter => 
         val cmdLine = buffer.toString.trim
+                            // ANSI for rens alt til højre for cursor: bruger til autocompletions
+        System.out.print(s"\r\u001b[K$prompt$buffer")
         System.out.print("\r\n")
+        System.out.flush()
         
         if (cmdLine == "undo") {
           envHistory match {
@@ -170,6 +188,17 @@ object Main extends App {
       case RightArrow =>
         val newState = state.copy(cursorIdx = Math.min(buffer.length, state.cursorIdx + 1))
         loop(buffer, newState, env, envHistory, cachedPrompt = prompt)
+
+      case End => 
+        HistoryManager.getSuggestion(buffer.toString) match {
+          case Some(suggestion) =>
+            buffer.clear()
+            buffer.append(suggestion)
+            val newState = state.copy(cursorIdx = suggestion.length)
+            loop(buffer, newState, env, envHistory, cachedPrompt = prompt)
+          case None => 
+            loop(buffer, state, env, envHistory, cachedPrompt = prompt)
+        }
 
       case CharKey(c) => 
         buffer.insert(state.cursorIdx, c)
