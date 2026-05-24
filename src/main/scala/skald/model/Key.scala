@@ -5,7 +5,7 @@ import java.io.Reader
 enum Key:
   case UpArrow, DownArrow, LeftArrow, RightArrow
   case Enter, Tab, Backspace, Escape, CtrlC, CtrlD, Unknown
-  case End, Home
+  case End //Home
   case CharKey(c: Char)
 
 object KeyReader {

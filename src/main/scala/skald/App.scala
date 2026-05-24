@@ -16,11 +16,12 @@ object Main extends App {
     state: EditorState = EditorState(),
     env: ShellEnv = ShellEnv(),
     envHistory: List[ShellEnv] = Nil,
-    cachedPrompt: String = ""
+    cachedPrompt: String = "",
+    config: SkaldConfig
   ): Unit = {
     
     val prompt = 
-      if (cachedPrompt.isEmpty()) PromptEngine.render(env)
+      if (cachedPrompt.isEmpty()) PromptEngine.render(env, config)
       else cachedPrompt
 
     if (state.tabCount == 0) {
@@ -64,12 +65,12 @@ object Main extends App {
             case previousEnv :: tail =>
               System.out.print(s"undo: Rolled back shell environment to: ${previousEnv.cwd}\r\n")
               JobManager.reapJobs()
-              loop(new StringBuilder(), EditorState(), previousEnv, envHistory = tail, cachedPrompt = "")
+              loop(new StringBuilder(), EditorState(), previousEnv, envHistory = tail, cachedPrompt = "", config = config)
               
             case Nil =>
               System.out.print("undo: No shell environment to roll back to!\r\n")
               JobManager.reapJobs()
-              loop(new StringBuilder(), EditorState(), env, envHistory = Nil, cachedPrompt = "")
+              loop(new StringBuilder(), EditorState(), env, envHistory = Nil, cachedPrompt = "", config = config)
           }
         } 
         else if (cmdLine.nonEmpty) {
@@ -92,16 +93,16 @@ object Main extends App {
               JobManager.reapJobs()
               
               val updatedHistory = if (nextEnv != env) env :: envHistory else envHistory
-              loop(new StringBuilder(), EditorState(), nextEnv, updatedHistory, cachedPrompt = "")
+              loop(new StringBuilder(), EditorState(), nextEnv, updatedHistory, cachedPrompt = "", config = config)
             }
             case Fail(err) => 
               System.out.print(err.printError)
               JobManager.reapJobs()
-              loop(new StringBuilder(), EditorState(), env, envHistory, cachedPrompt = "")
+              loop(new StringBuilder(), EditorState(), env, envHistory, cachedPrompt = "", config = config)
           }
         } else {
           JobManager.reapJobs()
-          loop(new StringBuilder(), EditorState(), env, envHistory, cachedPrompt = "")
+          loop(new StringBuilder(), EditorState(), env, envHistory, cachedPrompt = "", config = config)
         }
 
       case Tab =>
@@ -109,14 +110,14 @@ object Main extends App {
         Completer.complete(currentInput, env) match {
           case NoMatch =>
             System.out.print("\u0007")
-            loop(buffer, state, env, envHistory, cachedPrompt = prompt)
+            loop(buffer, state, env, envHistory, cachedPrompt = prompt, config = config)
 
           case SingleMatch(text) =>
             buffer.clear()
             buffer.append(text)
             //System.out.print(s"\r\u001b[K$prompt$buffer")
             val newState = state.copy(tabCount = 0, cursorIdx = text.length)
-            loop(buffer, newState, env, envHistory, cachedPrompt = prompt)
+            loop(buffer, newState, env, envHistory, cachedPrompt = prompt, config = config)
 
           case MultipleMatches(lcp, options) =>
             if (lcp.length > currentInput.length) {
@@ -125,21 +126,21 @@ object Main extends App {
               //System.out.print(s"\r\u001b[K$prompt$buffer")
 
               val newState = state.copy(tabCount = 0, cursorIdx = lcp.length)
-              loop(buffer, newState, env, envHistory, cachedPrompt = prompt)
+              loop(buffer, newState, env, envHistory, cachedPrompt = prompt, config = config)
 
             } else if (state.tabCount == 0) {
               System.out.print("\u0007")
               val newState = state.copy(tabCount = 1)
-              loop(buffer, newState, env, envHistory, cachedPrompt = prompt)
+              loop(buffer, newState, env, envHistory, cachedPrompt = prompt, config = config)
             } else if (state.tabCount == 1){
               System.out.print("\n" + options.sorted.mkString("  ") + "\n")
               System.out.print(s"$prompt$buffer")
               System.out.flush()
               val newState = state.copy(tabCount = 2)
-              loop(buffer, newState, env, envHistory, cachedPrompt = prompt)
+              loop(buffer, newState, env, envHistory, cachedPrompt = prompt, config = config)
             } else {
               System.out.print("\u0007")
-              loop(buffer, state, env, envHistory, cachedPrompt = prompt)
+              loop(buffer, state, env, envHistory, cachedPrompt = prompt, config = config)
             }
         }
 
@@ -147,9 +148,9 @@ object Main extends App {
         if (buffer.nonEmpty && state.cursorIdx > 0) {
           buffer.deleteCharAt(state.cursorIdx - 1)
           val newState = state.copy(cursorIdx = state.cursorIdx - 1)
-          loop(buffer, newState, env, envHistory, cachedPrompt = prompt)
+          loop(buffer, newState, env, envHistory, cachedPrompt = prompt, config = config)
         } else {
-          loop(buffer, state, env, envHistory, cachedPrompt = prompt)
+          loop(buffer, state, env, envHistory, cachedPrompt = prompt, config = config)
         }
 
       case UpArrow => 
@@ -161,9 +162,9 @@ object Main extends App {
           buffer.append(out)
 
           val newState = state.copy(historyIdx = newHistoryIdx, cursorIdx = out.length)
-          loop(buffer, newState, env, envHistory, cachedPrompt = prompt)
+          loop(buffer, newState, env, envHistory, cachedPrompt = prompt, config = config)
         } else {
-          loop(buffer, state, env, envHistory, cachedPrompt = prompt)
+          loop(buffer, state, env, envHistory, cachedPrompt = prompt, config = config)
         }
 
       case DownArrow => 
@@ -175,19 +176,19 @@ object Main extends App {
 
         if (newHistoryIdx == -1) {
           val newState = state.copy(cursorIdx = 0)
-          loop(buffer, newState, env, envHistory, cachedPrompt = prompt)
+          loop(buffer, newState, env, envHistory, cachedPrompt = prompt, config = config)
         } else {
           val newState = state.copy(historyIdx = newHistoryIdx, cursorIdx = out.length)
-          loop(buffer, newState, env, envHistory, cachedPrompt = prompt)
+          loop(buffer, newState, env, envHistory, cachedPrompt = prompt, config = config)
         }
 
       case LeftArrow =>
         val newState = state.copy(cursorIdx = Math.max(0, state.cursorIdx - 1))
-        loop(buffer, newState, env, envHistory, cachedPrompt = prompt)
+        loop(buffer, newState, env, envHistory, cachedPrompt = prompt, config = config)
 
       case RightArrow =>
         val newState = state.copy(cursorIdx = Math.min(buffer.length, state.cursorIdx + 1))
-        loop(buffer, newState, env, envHistory, cachedPrompt = prompt)
+        loop(buffer, newState, env, envHistory, cachedPrompt = prompt, config = config)
 
       case End => 
         HistoryManager.getSuggestion(buffer.toString) match {
@@ -195,34 +196,41 @@ object Main extends App {
             buffer.clear()
             buffer.append(suggestion)
             val newState = state.copy(cursorIdx = suggestion.length)
-            loop(buffer, newState, env, envHistory, cachedPrompt = prompt)
+            loop(buffer, newState, env, envHistory, cachedPrompt = prompt, config = config)
           case None => 
-            loop(buffer, state, env, envHistory, cachedPrompt = prompt)
+            loop(buffer, state, env, envHistory, cachedPrompt = prompt, config = config)
         }
 
       case CharKey(c) => 
         buffer.insert(state.cursorIdx, c)
         val newState = state.copy(cursorIdx = state.cursorIdx + 1, historyIdx = -1, tabCount = 0)
-        loop(buffer, newState, env, envHistory, cachedPrompt = prompt)
+        loop(buffer, newState, env, envHistory, cachedPrompt = prompt, config = config)
 
       case Escape => 
         val newState = state.copy(tabCount = 0)
-        loop(buffer, newState, env, envHistory, cachedPrompt = prompt)
+        loop(buffer, newState, env, envHistory, cachedPrompt = prompt, config = config)
 
       case Unknown =>
         System.out.print("\u0007")
-        loop(buffer, state, env, envHistory, cachedPrompt = prompt)
+        loop(buffer, state, env, envHistory, cachedPrompt = prompt, config = config)
     }
   }
 
   try {
     Terminal.setRaw()
     HistoryManager.init()
+    
     val baseEnv = ShellEnv()
     val startingEnv = ConfigLoader.loadRc(baseEnv)
-    loop(new StringBuilder(), env = startingEnv)
+    val config = ConfigLoader.loadConfig
+
+    loop(new StringBuilder(), env = startingEnv, config = config)
   } finally {
     Terminal.restore()
     HistoryManager.save()
+
+    // ANSI kode for at ændre den tilbage til blok cursor
+    System.out.print("\u001b[2 q")
+    System.out.flush()
   }
 }

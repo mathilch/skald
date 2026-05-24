@@ -4,38 +4,44 @@ import java.io.{File}
 import java.nio.file.Path
 import scala.sys.process._
 
-enum Prompt:
-  case Static(text: StyledText)
-  case CurrentDir
-  case GitBranch
-
 object PromptEngine {
-  def render(env: ShellEnv): String = {
-    val cwd = env.cwd 
-    val dirName = if (cwd.toString == "/") "/" else cwd.getFileName.toString
+  // når der i conf står \green{noget tekst} f.eks.
+  private val colorRegex = """\\([a-zA-Z]+)\{([^}]*)\}""".r
+
+  def render(env: ShellEnv, config: SkaldConfig): String = {
+
+    val gitBranch = GitStatus.fromPath(env.cwd) match {
+      case GitStatus.Branch(name)   => config.gitFormat.replace("%s", name)
+      case GitStatus.NotARepository => ""
+    }
+
+    val currentDirStr = formatDir(env.cwd.toString, config.dirDepth)
     
-    val gitBranch = getGitBranch(cwd) 
-    
-    // Byg de enkelte dele med StyledText
-    val dirStyled = StyledText(s"~/$dirName", List(Color.Bold, Color.Blue)).render
-    val gitStyled = gitBranch
-      .map(b => s" ${StyledText(s"($b)", List(Color.Green)).render}")
-      .getOrElse("")
-    val arrowStyled = StyledText.plain(" > ").render
-    
-    // Sæt strengen sammen
-    s"$dirStyled$gitStyled$arrowStyled"
+    val basePrompt = config.promptTemplate
+      .replace("%w", currentDirStr)
+      .replace("%b", gitBranch)
+
+    val rendered = colorRegex.replaceAllIn(basePrompt, matchData => {
+      val colorName = matchData.group(1)
+      val innerText = matchData.group(2)
+
+      Color.fromString(colorName) match {
+        case Some(color) =>
+          s"${color.ansiCode}$innerText${Color.Reset.ansiCode}"
+        case None => innerText
+      }
+    })
+
+    rendered + " "
   }
 
-  private def getGitBranch(cwd: Path): Option[String] = {
-    try {
-      val io = Process(Seq("git", "branch", "--show-current"), cwd.toFile)
-        .lazyLines_!(ProcessLogger(_ => ()))
-        
-      val branch = io.headOption 
-      branch.filter(_.trim.nonEmpty)
-    } catch {
-      case _: Exception => None
+  private def formatDir(path: String, deptOpt: Option[Int]): String = {
+    deptOpt match {
+      case Some(depth) if depth > 0 =>
+        val parts = path.split("/").filter(_.nonEmpty)
+        if (parts.length <= depth) path
+        else "/" + parts.takeRight(depth).mkString("/")
+      case _ => path
     }
   }
 }

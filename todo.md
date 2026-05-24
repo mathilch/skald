@@ -14,6 +14,7 @@
 - [x] Forbedret fejl håndtering, måske modellér med ADT's? overkill?
 - [x] inline suggestions ligesom zsh-autosuggestions
 - [ ] Fix tab autocompletions.
+- [ ] Up/Down history navigation skal arbejde ud fra hvad der allerede står på linjen
 - [ ] Eget scripting sprog?
 - [x] Smartere pipes, f.eks. implementer filter og map kommandoer e.g., ls | filter(_.size > 10mb) | map(_.name). 
       Mangler stadig flere operationer: indtil videre filter, map på gt og eq

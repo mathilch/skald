@@ -312,7 +312,8 @@ object Executor {
 
   private def createProcessBuilder(name: String, args: List[String], env: ShellEnv): Option[java.lang.ProcessBuilder] = {
     Path.findInPath(name).map { fullPath =>
-      val pb = new java.lang.ProcessBuilder((fullPath.toString :: args)*)
+      val expandedArgs = args.map(arg => Files.expandPath(arg))
+      val pb = new java.lang.ProcessBuilder((fullPath.toString :: expandedArgs)*)
       pb.directory(env.cwd.toFile)
 
       val pbEnv = pb.environment()
@@ -331,7 +332,7 @@ object Executor {
   }
 
   private def handleCd(pathStr: String, currentCwd: JPath): Either[String, JPath] = {
-    val target = if (pathStr == "~") sys.env.getOrElse("HOME", System.getProperty("user.home")) else pathStr
+    val target = Files.expandPath(pathStr)
     val p = Paths.get(target)
 
     val absP = if (p.isAbsolute) p else currentCwd.resolve(target)
