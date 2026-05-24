@@ -8,12 +8,19 @@ import scala.io.Source
 object ConfigLoader {
   def loadRc(initialEnv: ShellEnv): ShellEnv = {
     val rcFile = new File(System.getProperty("user.home"), ".skaldrc")
+    if (rcFile.exists()) loadFromFile(rcFile, initialEnv)
+    else initialEnv
+  }
 
-    if (!rcFile.exists()) return initialEnv
+  def loadFromFile(file: File, env: ShellEnv): ShellEnv = {
+    if (!file.exists()) {
+      System.err.println(s"skald: source: ${file.getPath}: No such file")
+      return env
+    }
 
-    val source = Source.fromFile(rcFile)
+    val source = scala.io.Source.fromFile(file)
     try {
-      source.getLines().foldLeft(initialEnv) { (currentEnv, line) =>
+      source.getLines().foldLeft(env) { (currentEnv, line) =>
         val trimmed = line.trim
         if (trimmed.isEmpty || trimmed.startsWith("#")) {
           currentEnv

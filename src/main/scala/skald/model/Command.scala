@@ -22,6 +22,7 @@ enum Command:
 
   case Alias(arg: AliasFlag)
   case Unalias(name: String)
+  case Source(file: String)
 
 enum AliasFlag:
   case PrintAll

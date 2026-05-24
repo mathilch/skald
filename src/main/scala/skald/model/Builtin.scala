@@ -13,6 +13,7 @@ enum Builtin(val name: String):
   case Declare  extends Builtin("declare")
   case Alias    extends Builtin("alias")
   case Unalias  extends Builtin("unalias")
+  case Source   extends Builtin("source")
 
 object Builtin:
   def fromString(s: String): Option[Builtin] =

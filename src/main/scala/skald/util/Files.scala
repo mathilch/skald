@@ -2,6 +2,7 @@ package skald
 
 import java.io.File
 import java.nio.file.{Files => JFiles, Paths, StandardOpenOption}
+import scala.jdk.CollectionConverters._
 
 object Files {
 
@@ -21,6 +22,14 @@ object Files {
       first.zip(last).takeWhile(p => p._1 == p._2).map(_._1).mkString
     }
 
+  def listDirectory(dir: java.nio.file.Path): Iterator[java.nio.file.Path] = {
+    if (JFiles.exists(dir) && JFiles.isDirectory(dir)) {
+      JFiles.list(dir).iterator().asScala
+    } else {
+      Iterator.empty
+    }
+  }
+
   def writeToFile(file: String, content: String): Unit = {
     JFiles.write(
       Paths.get(expandPath(file)), 
@@ -30,8 +39,6 @@ object Files {
   }
 
   def readFromFile(file: String): List[String] = {
-    import scala.jdk.CollectionConverters._
-
     val path = Paths.get(expandPath(file))
     if (JFiles.exists(path)) JFiles.readAllLines(path).asScala.map(_.trim()).filter(_.nonEmpty).toList
     else List.empty[String]  

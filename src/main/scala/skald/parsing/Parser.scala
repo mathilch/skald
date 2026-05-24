@@ -110,7 +110,14 @@ object Parser {
                         case name :: Nil => Success(Unalias(name))
                         case _ => Fail(ParseError.InvalidSyntax("use: unalias name"))
                       }
-                  } // Slut på Builtin match
+
+                    case Builtin.Source =>
+                      tail match {
+                        case file :: Nil => Success(Source(file))
+                        case Nil => Fail(ParseError.MissingArguments("source requires a filesname"))
+                        case _ => Fail(ParseError.InvalidSyntax("source requires exactly one filename"))
+                      }
+                  } 
 
                   case None => FunctionalOp.fromString(head) match {
                     case Some(op) => op match {
@@ -129,12 +136,12 @@ object Parser {
                           case Success(expr) => Success(Sort(expr, false))
                           case Fail(err)     => Fail(err)
                         }
-                    } // Slut på op match
+                    }
                     case None => Success(External(head, tail))
-                  } // Slut på FunctionalOp match
-                } // Slut på Builtin.fromString(head) match
-            } // Slut på resolvedTokens match
-        } // Slut på tokens match
+                  } 
+                } 
+            } 
+        } 
       }
 
     }

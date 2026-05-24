@@ -47,10 +47,7 @@ object Executor {
       }
 
     case Ls =>
-      import scala.jdk.CollectionConverters.*
-      val fileNodes = JFiles.list(env.cwd).iterator().asScala.map { path =>
-        ShellData.FileNode(path)
-      }
+      val fileNodes = Files.listDirectory(env.cwd).map(ShellData.FileNode(_))
       (ExecutionResult(fileNodes), env)
 
     case Type(args) => 
@@ -225,6 +222,14 @@ object Executor {
         case None => (ExecutionResult(stderr = s"no alias with name $name"), env)
         case Some(nextEnv) => (ExecutionResult(Iterator.empty), nextEnv)
       }
+
+    case Source(file) =>
+      val expandedPath = Files.expandPath(file)
+      val targetFile = new File(expandedPath)
+
+      val nextEnv = ConfigLoader.loadFromFile(targetFile, env)
+
+      (ExecutionResult(Iterator.empty), nextEnv)
   }
 
   private def valueToData(v: ShellValue): Option[ShellData] = v match {
