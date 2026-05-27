@@ -2,6 +2,7 @@ package skald
 
 import java.nio.file.{Paths, Files => JFiles}
 import scala.util.Properties
+import Result._
 
 object HistoryManager {
   
@@ -12,8 +13,8 @@ object HistoryManager {
   private val historyPath: String = sys.env.getOrElse("HISTFILE", s"$home/.skald_history")
 
   def init(): Unit = {
-    val lines = Files.readFromFile(historyPath)
-    history = lines.foldLeft(List.empty[String])((acc, elem) => elem :: acc)
+    val lines = readFromFile(historyPath)
+    history = lines.reverse
   }
 
   def save(): Unit = 
@@ -47,8 +48,11 @@ object HistoryManager {
       }
       .mkString("\n") + "\n"
 
-  def readFromFile(file: String): Unit =
-    Files.readFromFile(file).foreach(cmd => history = cmd :: history)
+  def readFromFile(file: String): List[String] =
+    Files.readFromFile(file) match {
+      case Success(lines) => lines.map(_.trim()).filter(_.nonEmpty).toList
+      case Fail(err)      => List.empty[String]
+    }
 
   def writeToFile(file: String): Unit =
     history.foreach(cmd => Files.appendToFile(file, cmd))

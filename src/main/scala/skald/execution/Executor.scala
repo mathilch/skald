@@ -7,6 +7,7 @@ import CompleteFlag._
 import DeclareFlag._
 import HistoryFlag._
 import AliasFlag._
+import Result._
 
 import java.io.File
 import java.nio.file.{Path => JPath, Paths, Files => JFiles}
@@ -49,6 +50,37 @@ object Executor {
     case Ls =>
       val fileNodes = Files.listDirectory(env.cwd).map(ShellData.FileNode(_))
       (ExecutionResult(fileNodes), env)
+
+    case Cat(files) =>
+      if (files.nonEmpty)  { //Læs fra files
+        val catIterator = files.iterator.flatMap { file =>
+          Files.readFromFile(file) match {
+            case Success(lineIte) => lineIte.map(ShellData.Text(_))
+            case Fail(err) => 
+              System.err.println(err.printError)
+              Iterator.empty
+          }
+        }
+        (ExecutionResult(catIterator), env)
+      } else {
+        val catIterator = stdin.flatMap { 
+          case ShellData.FileNode(path) => 
+            Files.readFromFile(path.toString) match {
+              case Success(lineIte) => lineIte.map(ShellData.Text(_))
+              case Fail(err) => 
+                System.err.println(err.printError)
+                Iterator.empty
+            }
+          case ShellData.Text(str) => 
+            Iterator(ShellData.Text(str))
+
+          case other => 
+            System.err.println(s"cat: unexpected datatype in pipeline: $other")
+            Iterator.empty
+        }
+        (ExecutionResult(catIterator), env)
+      }
+
 
     case Type(args) => 
       val out = handleType(args.headOption.getOrElse(""))

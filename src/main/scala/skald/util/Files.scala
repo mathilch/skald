@@ -3,6 +3,7 @@ package skald
 import java.io.File
 import java.nio.file.{Files => JFiles, Paths, StandardOpenOption}
 import scala.jdk.CollectionConverters._
+import Result._
 
 object Files {
 
@@ -38,10 +39,24 @@ object Files {
       StandardOpenOption.TRUNCATE_EXISTING)
   }
 
-  def readFromFile(file: String): List[String] = {
+  def readFromFile(file: String): Result[FileError, Iterator[String]] = {
     val path = Paths.get(expandPath(file))
-    if (JFiles.exists(path)) JFiles.readAllLines(path).asScala.map(_.trim()).filter(_.nonEmpty).toList
-    else List.empty[String]  
+    if (JFiles.exists(path) && JFiles.isRegularFile(path)) {
+      val source = scala.io.Source.fromFile(path.toFile)
+      val lines = source.getLines()
+
+      val safeIterator = new Iterator[String] {
+        override def hasNext: Boolean = {
+          val hasMore = lines.hasNext
+          if (!hasMore) source.close()
+          hasMore
+        }
+        override def next(): String = lines.next()
+      }
+      Success(safeIterator)
+      //JFiles.readAllLines(path).asScala.map(_.trim()).filter(_.nonEmpty).toList
+    }
+    else Fail(FileError.CannotReadFile(s"Cannot read from file: $path"))
   }
 
   def appendToFile(file: String, content: String): Unit = {

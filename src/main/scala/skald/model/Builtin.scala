@@ -15,6 +15,7 @@ enum Builtin(val name: String):
   case Alias    extends Builtin("alias")
   case Unalias  extends Builtin("unalias")
   case Source   extends Builtin("source")
+  case Cat      extends Builtin("cat")
 
 object Builtin:
   def fromString(s: String): Option[Builtin] =

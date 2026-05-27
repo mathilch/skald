@@ -76,6 +76,10 @@ object Parser {
                         case _ => Fail(ParseError.MissingArguments(s"Unrecognized arguments for Complete"))
                       }
                     case Builtin.Jobs => Success(Jobs)
+                    case Builtin.Cat =>
+                      tail match {
+                        case something => Success(Cat(something))
+                      }
                     case Builtin.History =>
                       tail match {
                         case "-r" :: file :: Nil => Success(History(ReadFromFile(file)))

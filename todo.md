@@ -7,7 +7,7 @@
 - [x] Alias
 - [ ] Export
 - [ ] SIGINT
-- [ ] Prompt konfig 
+- [x] Prompt konfig 
 - [ ] Miljø, e.g. python til prompt
 - [ ] Exit code visning hvis forrige kommando fejler
 - [ ] Multi-line edits med \
@@ -22,6 +22,6 @@
       accessed, modified skal kunne vælge imellem -t time, -d for date og ingen flags for datetime
 - [ ] Tilføj standard flags til ls. Overvej at skjul hidden files ved ls bare
 - [ ] Farve highlighted builtin keyword og externals
-
+- [ ] cat som en builtin så den kan bruges til dsl pipelines
 
 - [ ] ordentlig README
