@@ -203,19 +203,22 @@ object Executor {
       val (res, nextEnv) = evaluate(cmd, env, stdin)
 
       val dataToFile = target match {
-        case Stdout => res.output.map(_.asString).mkString("\n") + "\n"
-        case Stderr => res.stderr
+        case Stdout => res.output.map(_.asString)
+        case Stderr => 
+          if (res.stderr.nonEmpty) Iterator(res.stderr)
+          else Iterator.empty
       }
 
       mode match {
         case Overwrite => Files.writeToFile(targetFile, dataToFile)
-        case Append => Files.appendNewlineToFile(targetFile, dataToFile)
+        case Append => Files.appendToFile(targetFile, dataToFile)
       }
 
-      target match {
-        case Stdout => (res.copy(output = Iterator.empty), nextEnv)
-        case Stderr => (res.copy(stderr = ""), nextEnv)
+      val finalRes = target match {
+        case Stdout => res.copy(output = Iterator.empty)
+        case Stderr => res.copy(stderr = "")
       }
+      (finalRes, nextEnv)
 
     case Filter(expr) => 
       val filteredStream = stdin.filter { item =>

@@ -22,6 +22,8 @@
       accessed, modified skal kunne vælge imellem -t time, -d for date og ingen flags for datetime
 - [ ] Tilføj standard flags til ls. Overvej at skjul hidden files ved ls bare
 - [ ] Farve highlighted builtin keyword og externals
-- [ ] cat som en builtin så den kan bruges til dsl pipelines
+- [x] cat som en builtin så den kan bruges til dsl pipelines (Mangler flags)
+- [ ] grep?
+- [ ] && og ||. bliver nødt til at refaktoere så exitcodes er bedre håndteret i executoren. måske ved en Result?
 
 - [ ] ordentlig README

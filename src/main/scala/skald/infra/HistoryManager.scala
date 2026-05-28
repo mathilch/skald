@@ -42,7 +42,7 @@ object HistoryManager {
     history
       .reverse
       .zipWithIndex
-    .takeRight(n)
+      .takeRight(n)
       .map { (cmd, idx) =>
         s"    ${formatIdx(idx)}  $cmd"
       }
@@ -55,11 +55,13 @@ object HistoryManager {
     }
 
   def writeToFile(file: String): Unit =
-    history.foreach(cmd => Files.appendToFile(file, cmd))
+    Files.writeToFile(file, history.reverse.iterator)
 
   def appendToFile(file: String): Unit =
-    historyBuffer.foreach(cmd => Files.appendNewlineToFile(file, cmd))
-    historyBuffer = List.empty[String]
+    if (historyBuffer.nonEmpty) {
+      Files.appendToFile(file, historyBuffer.reverse.iterator)
+      historyBuffer = List.empty[String]
+    }
 
   private def formatIdx(idx: Int): String =
     val totalCommands = history.size

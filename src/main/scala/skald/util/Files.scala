@@ -1,18 +1,19 @@
 package skald 
 
-import java.io.File
-import java.nio.file.{Files => JFiles, Paths, StandardOpenOption}
+import java.nio.file.{Files => JFiles, Paths, Path, StandardOpenOption}
 import scala.jdk.CollectionConverters._
 import Result._
 
 object Files {
 
-  def findEntriesInDirectory(dir: String, file: String): List[File] =
-    Option(new File(dir).listFiles())
-      .map(_.toList)
-      .getOrElse(Nil)
-      .filter(_.getName().startsWith(file))
-      .sortBy(_.getName())
+  def findEntriesInDirectory(dir: String, file: String): List[Path] =
+    val path = Paths.get(expandPath(file))
+    if (JFiles.exists(path) && JFiles.isDirectory(path)) {
+      JFiles.list(path).iterator.asScala
+        .filter(_.getFileName.toString.startsWith(file))
+        .toList.sorted
+    } else Nil
+
 
   def lcp(names: List[String]): String =
     if (names.isEmpty) ""
@@ -23,7 +24,7 @@ object Files {
       first.zip(last).takeWhile(p => p._1 == p._2).map(_._1).mkString
     }
 
-  def listDirectory(dir: java.nio.file.Path): Iterator[java.nio.file.Path] = {
+  def listDirectory(dir: java.nio.file.Path): Iterator[Path] = {
     if (JFiles.exists(dir) && JFiles.isDirectory(dir)) {
       JFiles.list(dir).iterator().asScala
     } else {
@@ -31,10 +32,10 @@ object Files {
     }
   }
 
-  def writeToFile(file: String, content: String): Unit = {
+  def writeToFile(file: String, lines: Iterator[String]): Unit = {
     JFiles.write(
       Paths.get(expandPath(file)), 
-      content.getBytes, 
+      lines.to(Iterable).asJava, 
       StandardOpenOption.CREATE, 
       StandardOpenOption.TRUNCATE_EXISTING)
   }
@@ -59,22 +60,10 @@ object Files {
     else Fail(FileError.CannotReadFile(s"Cannot read from file: $path"))
   }
 
-  def appendToFile(file: String, content: String): Unit = {
-    val lineWithSeperator = if content.nonEmpty then content + "\n" else ""
-
+  def appendToFile(file: String, lines: Iterator[String]): Unit = {
     JFiles.write(
       Paths.get(expandPath(file)), 
-      content.getBytes, 
-      StandardOpenOption.CREATE, 
-      StandardOpenOption.APPEND)
-  }
-
-  def appendNewlineToFile(file: String, content: String): Unit = {
-    val lineWithSeperator = if (content.endsWith("\n")) content else content + "\n"
-
-    JFiles.write(
-      Paths.get(expandPath(file)), 
-      lineWithSeperator.getBytes, 
+      lines.to(Iterable).asJava, 
       StandardOpenOption.CREATE, 
       StandardOpenOption.APPEND)
   }

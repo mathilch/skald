@@ -1,6 +1,7 @@
 package skald
 
 import Completion._
+import java.nio.file.{Files => JFiles}
 
 object Completer {
   def complete(currentInput: String, env: ShellEnv): Completion = {
@@ -54,7 +55,7 @@ object Completer {
       case Nil => NoMatch
       
       case x :: Nil =>
-        val suffix = if (x.isDirectory()) "/" else " "
+        val suffix = if (JFiles.isDirectory(x)) "/" else " "
         val completedPath = 
           if (lastSlash == -1) x.getName 
           else fullArg.substring(0, lastSlash + 1) + x.getName
@@ -62,8 +63,8 @@ object Completer {
       
       case multiples =>
         val formatted = multiples.map { f =>
-          val name = f.getName()
-          if (f.isDirectory()) s"$name/" else s"$name "
+          val name = f.getFileName.toString
+          if (JFiles.isDirectory(f)) s"$name/" else s"$name "
         }
 
         val lcp = Files.lcp(formatted)
