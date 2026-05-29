@@ -5,7 +5,9 @@ import Result._
 case class ParserState(tokens: List[String]) {
   def peek: Option[String] = tokens.headOption 
 
-  def next: ParserState = ParserState(tokens.drop(1))
+  def next: ParserState = ParserState(tokens.tail)
+
+  def consume: (String, ParserState) = (tokens.head, ParserState(tokens.tail))
 
   def isEmpty: Boolean = tokens.isEmpty
 

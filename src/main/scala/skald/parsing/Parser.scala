@@ -10,184 +10,197 @@ import Result._
 import AliasFlag._
 
 object Parser {
-  def parse(tokens: List[String], aliases: Map[String, String] = Map.empty): Result[ParseError, Command] = {
-    if (tokens.last == "&") {
-      val cmd = tokens.init
-      return parse(cmd, aliases).map(process => Subprocess(process))
+
+  def parse(tokens: List[String], aliases: Map[String, String]): Result[ParseError, Command] = {
+    if (tokens.lastOption.contains("&")) {
+      parse(tokens.init, aliases).map(Subprocess.apply)
+    } else {
+      parsePipeline(ParserState(tokens), aliases)
     }
+  }
 
+  private def parsePipeline(state: ParserState, aliases: Map[String, String]): Result[ParseError, Command] = {
+    val pipeIdx = state.tokens.indexOf("|")
+    if (pipeIdx != -1) {
+      val (left, right) = state.tokens.splitAt(pipeIdx)
+      for {
+        leftCmd <- parseRedirect(ParserState(left), aliases)
+        restCmd <- parsePipeline(ParserState(right.tail), aliases)
+      } yield Pipeline(List(leftCmd) ++ (restCmd match { case Pipeline(cmds) => cmds; case c => List(c)}))
+    } else {
+      parseRedirect(state, aliases)
+    }
+  }
+
+  private def parseRedirect(state: ParserState, aliases: Map[String, String]): Result[ParseError, Command] = {
     val redirectTokens = Set(">", "1>", "2>", ">>", "1>>", "2>>")
-    val rIdx = tokens.indexWhere(redirectTokens.contains)
-       
-    if (rIdx != -1) {
-      // Hvis 1> eller > eksistere
-      val left = tokens.take(rIdx)
-      val right = tokens.lift(rIdx + 1).getOrElse("")
-      val op = tokens(rIdx)
+    val rIdx = state.tokens.indexWhere(redirectTokens.contains)
 
-      parse(left, aliases).map { cmd =>
+    if (rIdx != -1) {
+      val (left, right) = state.tokens.splitAt(rIdx)
+      val op = right.head
+      val targetFile = right.tail.headOption.getOrElse("")
+
+      parseSimpleCommand(ParserState(left), aliases).map { cmd =>
         val (target, mode) = op match {
           case "1>>" | ">>" => (Stdout, Append)
           case "2>>"        => (Stderr, Append)
           case "2>"         => (Stderr, Overwrite)
           case _            => (Stdout, Overwrite) // > eller 1>
         }
-        Redirect(cmd, target, mode, right)
+        Redirect(cmd, target, mode, targetFile)
       }
+
     } else {
-      val pipeIdx = tokens.lastIndexOf("|")
-      if (pipeIdx != -1) {
-        
-        val segments = tokens.foldLeft(List(List.empty[String])) { (acc, token) =>
-          token match {
-            case "|" => List.empty[String] :: acc
-            case t => (t :: acc.head) :: acc.tail
-          }
-        }.map(_.reverse).reverse
-
-        return segments.map(s => parse(s, aliases)).sequence.map(Pipeline.apply)
-  
-      } else {
-        // Hvis > ikke eksistere
-        tokens match {
-          case Nil => Fail(ParseError.MissingArguments(s"Nothing"))
-          case h :: t =>
-            val resolvedTokens = aliases.get(h) match {
-              case Some(aliasValue) => Lexer.tokenizeInput(aliasValue) ++ t
-              case None => tokens
-            }
-
-            resolvedTokens match {
-              case Nil => Fail(ParseError.MissingArguments(s"Empty alias"))
-              case head :: tail =>
-                Builtin.fromString(head) match {
-                  case Some(b) => b match {
-                    case Builtin.Exit => Success(Exit)
-                    case Builtin.Echo => Success(Echo(tail))
-                    case Builtin.Pwd  => Success(Pwd)
-                    case Builtin.Type => Success(Type(tail))
-                    case Builtin.Cd   => Success(Cd(tail))
-                    case Builtin.Ls   => Success(Ls)
-                    case Builtin.Complete =>
-                      tail match {
-                        case "-p" :: cmd :: Nil => Success(Complete(PrintSpec(cmd)))
-                        case "-C" :: path :: cmd :: Nil => Success(Complete(RegisterSpec(path, cmd)))
-                        case "-r" :: cmd :: Nil => Success(Complete(UnregisterSpec(cmd)))
-                        case _ => Fail(ParseError.MissingArguments(s"Unrecognized arguments for Complete"))
-                      }
-                    case Builtin.Jobs => Success(Jobs)
-                    case Builtin.Cat =>
-                      tail match {
-                        case something => Success(Cat(something))
-                      }
-                    case Builtin.Grep =>
-                      tail match {
-                        case Nil => Fail(ParseError.MissingArguments(s"Unrecognized argument for Grep"))
-                        case word :: files => Success(Grep(word, files))
-                      }
-                    case Builtin.History =>
-                      tail match {
-                        case "-r" :: file :: Nil => Success(History(ReadFromFile(file)))
-                        case "-w" :: file :: Nil => Success(History(WriteToFile(file)))
-                        case "-a" :: file :: Nil => Success(History(AppendToFile(file)))
-                        case n :: Nil => n.toIntOption match {
-                          case Some(number) => Success(History(NHistory(number)))
-                          case None => Fail(ParseError.MissingArguments("Unrecognized argument for History"))
-                        }
-                        case Nil => Success(History(ShowAll))
-                        case _ => Fail(ParseError.MissingArguments("Unrecognized arguments for History"))
-                      }
-                    case Builtin.Declare =>
-                      tail match {
-                        case "-p" :: variable :: Nil => Success(Declare(PrintVariable(variable)))
-                        case assignment :: Nil if assignment.contains("=") =>
-                          val Array(name, value) = assignment.split("=", 2)
-                          Success(Declare(AssignVariable(name, value)))
-                        case _ => Fail(ParseError.MissingArguments(s"Unrecognized arguments for Declare"))
-                      }
-                    case Builtin.Export => 
-                      tail match {
-                        case assignment :: Nil if assignment.contains("=") =>
-                          val Array(name, value) = assignment.split("=", 2)
-                          Success(Declare(AssignVariable(name, value)))
-                        case _ => Fail(ParseError.MissingArguments(s"Unrecognized arguments for Export"))
-                      } 
-                    case Builtin.Alias =>
-                      tail match {
-                        case Nil => Success(Alias(PrintAll))
-                        case assignment :: Nil if assignment.contains("=") =>
-                          val Array(name, value) = assignment.split("=", 2)
-                          val cleanValue = value.stripPrefix("\"").stripSuffix("\"").stripPrefix("\'").stripSuffix("\'")
-                          Success(Alias(AssignAlias(name, cleanValue)))
-                        case _ => Fail(ParseError.InvalidSyntax(s"use: alias name=\"value\" to create an alias"))
-                      }
-                    case Builtin.Unalias =>
-                      tail match {
-                        case name :: Nil => Success(Unalias(name))
-                        case _ => Fail(ParseError.InvalidSyntax("use: unalias name"))
-                      }
-
-                    case Builtin.Source =>
-                      tail match {
-                        case file :: Nil => Success(Source(file))
-                        case Nil => Fail(ParseError.MissingArguments("source requires a filesname"))
-                        case _ => Fail(ParseError.InvalidSyntax("source requires exactly one filename"))
-                      }
-                  } 
-
-                  case None => FunctionalOp.fromString(head) match {
-                    case Some(op) => op match {
-                      case FunctionalOp.Filter =>
-                        parseExpr(tail) match {
-                          case Success(expr) => Success(Filter(expr))
-                          case Fail(err)     => Fail(err)
-                        }
-                      case FunctionalOp.Map => // Bruger din MapCmd her
-                        parseExpr(tail) match {
-                          case Success(expr) => Success(skald.Command.Map(expr))
-                          case Fail(err)     => Fail(err)
-                        }
-                      case FunctionalOp.Sort =>
-                        parseExpr(tail) match {
-                          case Success(expr) => Success(Sort(expr, false))
-                          case Fail(err)     => Fail(err)
-                        }
-                    }
-                    case None => Success(External(head, tail))
-                  } 
-                } 
-            } 
-        } 
-      }
-
+      parseSimpleCommand(state, aliases)
     }
   }
 
-  def parseExpr(tokens: List[String]): Result[ParseError, Expr] = tokens match {
+  private def parseSimpleCommand(state: ParserState, aliases: Map[String, String]): Result[ParseError, Command] = {
+    state.peek match {
+      case None => Fail(ParseError.MissingArguments("Empty"))
+      case Some(head) =>
+        val resolved = aliases.getOrElse(head, head)
+        val args = state.tokens.tail
 
-    case prop :: Nil if prop.startsWith("_.") =>
-      Success(Expr.PropAccess(prop.stripPrefix("_.")))
+        if (Builtin.isBuiltin(resolved)) parseBuiltin(resolved, args)
+        else if (FunctionalOp.isFunctionalOp(resolved)) parseFunctionalOp(resolved, ParserState(args))
+      //else if (Interactive.isInteractive(resolved)) Success(Command.Interactive(resolved, args))
+        else Success(Command.External(resolved, args))
+    }
+  }
 
-    case prop :: op :: value :: Nil if prop.startsWith("_.") =>
-      val field = prop.stripPrefix("_.")
-      val left = Expr.PropAccess(field)
+  private def parseBuiltin(name: String, tail: List[String]): Result[ParseError, Command] = name match {
+    case "exit"     => Success(Exit)
+    case "echo"     => Success(Echo(tail))
+    case "pwd"      => Success(Pwd)
+    case "type"     => Success(Type(tail))
+    case "cd"       => Success(Cd(tail))
+    case "ls"       => Success(Ls)
+    case "jobs"     => Success(Jobs)
+    case "cat"      => Success(Cat(tail))
+    case "complete" => parseComplete(tail)
+    case "history"  => parseHistory(tail)
+    case "grep"     => parseGrep(tail)
+    case "declare"  => parseDeclare(tail)
+    case "export"   => parseExport(tail)
+    case "alias"    => parseAlias(tail)
+    case "unalias"  => parseUnalias(tail)
+    case "source"   => parseSource(tail)
+  }
 
-      val right = parseByteSize(value) match {
-        case Some(num) => Expr.LitInt(num)
-        case None      => value.toBooleanOption match {
-          case Some(b) => Expr.LitBool(b)
-          case None => Expr.LitStr(value)
+  private def parseHistory(tail: List[String]): Result[ParseError, Command] = tail match {
+    case "-r" :: file :: Nil => Success(History(ReadFromFile(file)))
+    case "-w" :: file :: Nil => Success(History(WriteToFile(file)))
+    case "-a" :: file :: Nil => Success(History(AppendToFile(file)))
+    case n :: Nil => n.toIntOption match {
+      case Some(number) => Success(History(NHistory(number)))
+      case None => Fail(ParseError.MissingArguments("Unrecognized argument for History"))
+    }
+    case Nil => Success(History(ShowAll))
+    case _ => Fail(ParseError.MissingArguments("Unrecognized arguments for History"))
+  }
+
+  private def parseComplete(tail: List[String]): Result[ParseError, Command] = tail match {
+    case "-p" :: cmd :: Nil => Success(Complete(PrintSpec(cmd)))
+    case "-C" :: path :: cmd :: Nil => Success(Complete(RegisterSpec(path, cmd)))
+    case "-r" :: cmd :: Nil => Success(Complete(UnregisterSpec(cmd)))
+    case _ => Fail(ParseError.MissingArguments(s"Unrecognized arguments for Complete"))
+  }
+
+  private def parseGrep(tail: List[String]): Result[ParseError, Command] = tail match {
+    case Nil => Fail(ParseError.MissingArguments(s"Unrecognized argument for Grep"))
+    case word :: files => Success(Grep(word, files))
+  }
+
+  private def parseDeclare(tail: List[String]): Result[ParseError, Command] = tail match {
+    case "-p" :: variable :: Nil => Success(Declare(PrintVariable(variable)))
+    case assignment :: Nil if assignment.contains("=") =>
+      val Array(name, value) = assignment.split("=", 2)
+      Success(Declare(AssignVariable(name, value)))
+    case _ => Fail(ParseError.MissingArguments(s"Unrecognized arguments for Declare"))
+  }
+
+  private def parseExport(tail: List[String]): Result[ParseError, Command] = tail match {
+    case assignment :: Nil if assignment.contains("=") =>
+      val Array(name, value) = assignment.split("=", 2)
+      Success(Declare(AssignVariable(name, value)))
+    case _ => Fail(ParseError.MissingArguments(s"Unrecognized arguments for Export"))
+  }
+
+  private def parseAssignment(tail: List[String]): Result[ParseError, Command] = tail match {
+    case assignment :: Nil if assignment.contains("=") =>
+      val Array(name, value) = assignment.split("=", 2)
+      Success(Declare(AssignVariable(name, value)))
+    case _ => Fail(ParseError.MissingArguments("Ugyldig assignment format"))
+  }
+
+  private def parseAlias(tail: List[String]): Result[ParseError, Command] = tail match {
+    case Nil => Success(Alias(PrintAll))
+    case assignment :: Nil if assignment.contains("=") =>
+      val Array(name, value) = assignment.split("=", 2)
+      val cleanValue = value.stripPrefix("\"").stripSuffix("\"").stripPrefix("\'").stripSuffix("\'")
+      Success(Alias(AssignAlias(name, cleanValue)))
+    case _ => Fail(ParseError.InvalidSyntax(s"use: alias name=\"value\" to create an alias"))
+  }
+
+  private def parseUnalias(tail: List[String]): Result[ParseError, Command] = tail match {
+    case name :: Nil => Success(Unalias(name))
+    case _ => Fail(ParseError.InvalidSyntax("use: unalias name"))
+  }
+
+  private def parseSource(tail: List[String]): Result[ParseError, Command] = tail match {
+    case file :: Nil => Success(Source(file))
+    case Nil => Fail(ParseError.MissingArguments("source requires a filesname"))
+    case _ => Fail(ParseError.InvalidSyntax("source requires exactly one filename"))
+  }
+
+  private def parseFunctionalOp(name: String, state: ParserState): Result[ParseError, Command] = {
+    parseExpr(state).flatMap { expr =>
+      name match {
+        case "filter" => Success(Filter(expr))
+        case "map"    => Success(MapCmd(expr))
+        case "sort"   => Success(Sort(expr, false))
+        case unknown  => Fail(ParseError.InvalidSyntax(s"Not implemented yet: $unknown"))
+      }
+    }
+  }
+
+
+  private def parseExpr(state: ParserState): Result[ParseError, Expr] = {
+    val (prop, state1) = state.consume
+    
+    if (!prop.startsWith("_.")) return Fail(ParseError.InvalidSyntax(s"Prop expected, instead got: $prop"))
+    
+    val left = Expr.PropAccess(prop.stripPrefix("_."))
+    state1.peek match {
+      case None => Success(left)
+      case Some(op) =>
+        val (_, state2) = state1.consume
+        if (state2.isEmpty) {
+          Fail(ParseError.MissingArguments(s"Value required for op: '$op'"))
+        } else {
+          val (value, _) = state2.consume
+          val right = parseLiteral(value)
+          
+          op match {
+            case "gt" => Success(Expr.GreaterThan(left, right))
+            case "lt" => Success(Expr.LesserThan(left, right))
+            case "eq" => Success(Expr.Equals(left, right))
+            case _    => Fail(ParseError.UnknownOperator(s"Unknown operator: $op"))
+          }
         }
-      }
+    }
+  }
 
-      op match {
-        case "gt" => Success(Expr.GreaterThan(left, right))
-        case "lt" => Success(Expr.LesserThan(left, right))
-        case "eq" => Success(Expr.Equals(left, right))
-        case _ => Fail(ParseError.UnknownOperator(s"Unknown operatoe: $op. Expected gt, lt or eq"))
+  private def parseLiteral(value: String): Expr = {
+    parseByteSize(value) match {
+      case Some(num) => Expr.LitInt(num)
+      case None => value.toBooleanOption match {
+        case Some(b) => Expr.LitBool(b)
+        case None    => Expr.LitStr(value)
       }
-
-    case _ => Fail(ParseError.InvalidSyntax(s"Wrong syntax"))
+    }
   }
 
   private def parseByteSize(value: String): Option[Long] = {

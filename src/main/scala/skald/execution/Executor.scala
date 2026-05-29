@@ -332,11 +332,6 @@ object Executor {
     }
   }
 
-
-
-  /* stdin tilføjet i tilfælde af at external er højre led i en pipeline, i så fald vil stdin beskrive
-   * output fra venstre led
-  */
   private def runExternal(name: String, args: List[String], env: ShellEnv, stdin: Iterator[ShellData]): ExecutionResult = {
     createProcessBuilder(name, args, env) match {
       case Some(pb) =>
