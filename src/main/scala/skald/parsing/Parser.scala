@@ -80,6 +80,11 @@ object Parser {
                       tail match {
                         case something => Success(Cat(something))
                       }
+                    case Builtin.Grep =>
+                      tail match {
+                        case Nil => Fail(ParseError.MissingArguments(s"Unrecognized argument for Grep"))
+                        case word :: files => Success(Grep(word, files))
+                      }
                     case Builtin.History =>
                       tail match {
                         case "-r" :: file :: Nil => Success(History(ReadFromFile(file)))

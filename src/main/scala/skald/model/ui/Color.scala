@@ -23,6 +23,9 @@ object Color:
     case _          => None
   }
 
+extension (s: String)
+  def colorize(c: Color): String = s"${c.ansiCode}$s${Color.Reset.ansiCode}"
+
 
 
 

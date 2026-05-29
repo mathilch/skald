@@ -8,6 +8,7 @@ enum Command:
   case Cd(args: List[String])
   case Ls
   case Cat(files: List[String])
+  case Grep(pattern: String, files: List[String])
   case Complete(arg: CompleteFlag)
   case Jobs
   case History(arg: HistoryFlag)

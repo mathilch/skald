@@ -14,6 +14,7 @@ import java.nio.file.{Path => JPath, Paths, Files => JFiles}
 import scala.sys.process.*
 import skald.JobManager.BackgroundJob
 import skald.Files.readFromFile
+import skald.ShellData.GrepMatch
 
 object Executor {
 
@@ -51,11 +52,12 @@ object Executor {
       val fileNodes = Files.listDirectory(env.cwd).map(ShellData.FileNode(_))
       (ExecutionResult(fileNodes), env)
 
+    // Håndter errors bedre i tilfælde af redirections
     case Cat(files) =>
       if (files.nonEmpty)  { //Læs fra files
         val catIterator = files.iterator.flatMap { file =>
           Files.readFromFile(file) match {
-            case Success(lineIte) => lineIte.map(ShellData.Text(_))
+            case Success(lineIte) => lineIte.map(ShellData.FileLine(file, _))
             case Fail(err) => 
               System.err.println(err.printError)
               Iterator.empty
@@ -66,7 +68,7 @@ object Executor {
         val catIterator = stdin.flatMap { 
           case ShellData.FileNode(path) => 
             Files.readFromFile(path.toString) match {
-              case Success(lineIte) => lineIte.map(ShellData.Text(_))
+              case Success(lineIte) => lineIte.map(ShellData.FileLine(path.toString, _))
               case Fail(err) => 
                 System.err.println(err.printError)
                 Iterator.empty
@@ -81,6 +83,39 @@ object Executor {
         (ExecutionResult(catIterator), env)
       }
 
+    case Grep(word, files) =>
+      if (files.isEmpty) {
+        val filteredOutput = stdin.zipWithIndex.collect {
+          case (ShellData.FileLine(filename, content), idx) if content.contains(word) =>
+            ShellData.GrepMatch(Some(filename), idx + 1, content, word)
+            
+          case (ShellData.Text(content), idx) if content.contains(word) =>
+            ShellData.GrepMatch(None, idx + 1, content, word)
+        }
+        (ExecutionResult(filteredOutput), env)
+
+      } else {
+        val (iterators, errors) = files.foldLeft((List.empty[Iterator[ShellData]], List.empty[String])) {
+          case ((iters, errs), fileName) =>
+            Files.readFromFile(fileName) match {
+              case Success(lines) =>
+                val showFileName = if (files.size > 1) Some(fileName) else None
+                
+                val matchedLines = lines.zipWithIndex.collect {
+                  case (line, idx) if line.contains(word) =>
+                    ShellData.GrepMatch(showFileName, idx + 1, line, word)
+                }
+                (matchedLines :: iters, errs)
+                
+              case Fail(err) => 
+                (iters, err.printError :: errs)
+            }
+        }
+        val combinedOutput = iterators.reverse.reduceOption(_ ++ _).getOrElse(Iterator.empty)
+        val stderrOutput = errors.reverse.mkString("\n")
+
+        (ExecutionResult(output = combinedOutput, stderr = stderrOutput), env)
+      }
 
     case Type(args) => 
       val out = handleType(args.headOption.getOrElse(""))

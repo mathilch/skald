@@ -8,6 +8,7 @@ case class ExecutionResult(
   stderr: String = "",
   exitCode: Int = 0
 )
+
 // ) {
 //   def stdout: String =
 //     val items = output.toList
