@@ -26,6 +26,7 @@ object Executor {
     cmd: Command, 
     env: ShellEnv = ShellEnv(),
     stdin: Iterator[ShellData] = Iterator.empty, 
+    captureOutput: Boolean = false
   ): (ExecutionResult, ShellEnv) = cmd match {
 
 
@@ -52,9 +53,9 @@ object Executor {
       val fileNodes = Files.listDirectory(env.cwd).map(ShellData.FileNode(_))
       (ExecutionResult(fileNodes), env)
 
-    // Håndter errors bedre i tilfælde af redirections
+    // TODO Håndter errors bedre i tilfælde af redirections
     case Cat(files) =>
-      if (files.nonEmpty)  { //Læs fra files
+      if (files.nonEmpty)  { 
         val catIterator = files.iterator.flatMap { file =>
           Files.readFromFile(file) match {
             case Success(lineIte) => lineIte.map(ShellData.FileLine(file, _))
@@ -229,13 +230,13 @@ object Executor {
       }
 
     case External(name, args) => 
-      val res = runExternal(name, args, env, stdin)
+      val res = runExternal(name, args, env, stdin, captureOutput)
       (res, env)
 
-    case Pipeline(commands) => executeChain(commands, stdin, env)
+    case Pipeline(commands) => executeChain(commands, stdin, env, captureOutput)
 
     case Redirect(cmd, target, mode, targetFile) =>
-      val (res, nextEnv) = evaluate(cmd, env, stdin)
+      val (res, nextEnv) = evaluate(cmd, env, stdin, true)
 
       val dataToFile = target match {
         case Stdout => res.output.map(_.asString)
@@ -323,57 +324,68 @@ object Executor {
   private def executeChain(
     commands: List[Command], 
     stdin: Iterator[ShellData], 
-    initialEnv: ShellEnv
+    initialEnv: ShellEnv,
+    captureOutput: Boolean
   ): (ExecutionResult, ShellEnv) = {
     
-    commands.foldLeft((ExecutionResult(stdin), initialEnv)) {
-      case ((accRes, currentEnv), cmd) =>
-        evaluate(cmd, currentEnv, accRes.output)
+    commands.zipWithIndex.foldLeft((ExecutionResult(stdin), initialEnv)) {
+      case ((accRes, currentEnv), (cmd, idx)) =>
+        val isLastCommand = idx == commands.length - 1
+        val shouldCapture = if (isLastCommand) captureOutput else true
+
+        evaluate(cmd, currentEnv, accRes.output, shouldCapture)
     }
   }
 
-
-
-  /* stdin tilføjet i tilfælde af at external er højre led i en pipeline, i så fald vil stdin beskrive
-   * output fra venstre led
-  */
-  private def runExternal(name: String, args: List[String], env: ShellEnv, stdin: Iterator[ShellData]): ExecutionResult = {
+  private def runExternal(name: String, args: List[String], env: ShellEnv, stdin: Iterator[ShellData], captureOutput: Boolean): ExecutionResult = {
     createProcessBuilder(name, args, env) match {
       case Some(pb) =>
-        val process = pb.start()
-
-        if (stdin.nonEmpty) {
-          new Thread(() => {
-            val writer = new java.io.BufferedWriter(new java.io.OutputStreamWriter(process.getOutputStream))
-            stdin.foreach { data =>
-              writer.write(data.asString + "\n")
-            }
-            writer.flush()
-            writer.close()
-          }).start()
-        }
-
-        val reader = new java.io.BufferedReader(new java.io.InputStreamReader(process.getInputStream))
-        val outputIterator = new Iterator[ShellData] {
-          private var nextLine: String = reader.readLine()
+        if (stdin.isEmpty && !captureOutput) {
           
-          override def hasNext: Boolean = nextLine != null
-          
-          override def next(): ShellData = {
-            val current = nextLine
-            nextLine = reader.readLine() // Forbered næste kald
-            
-            // Hvis vi er færdige, vent på at processen dør pænt
-            if (nextLine == null) process.waitFor() 
-            
-            ShellData.Text(current)
+          Terminal.restore()
+          pb.inheritIO()
+          val process = pb.start()
+          val exitCode = process.waitFor()
+          Terminal.setRaw()
+
+          ExecutionResult(Iterator.empty, exitCode = exitCode)
+        } else {
+        
+          val process = pb.start()
+
+          if (stdin.nonEmpty) {
+            new Thread(() => {
+              val writer = new java.io.BufferedWriter(new java.io.OutputStreamWriter(process.getOutputStream))
+              stdin.foreach { data =>
+                writer.write(data.asString + "\n")
+              }
+              writer.flush()
+              writer.close()
+            }).start()
           }
+
+          val reader = new java.io.BufferedReader(new java.io.InputStreamReader(process.getInputStream))
+          val outputIterator = new Iterator[ShellData] {
+            private var nextLine: String = reader.readLine()
+            
+            override def hasNext: Boolean = nextLine != null
+            
+            override def next(): ShellData = {
+              val current = nextLine
+              nextLine = reader.readLine() // Forbered næste kald
+              
+              // Hvis vi er færdige, vent på at processen dør pænt
+              if (nextLine == null) process.waitFor() 
+              
+              ShellData.Text(current)
+            }
+          }
+
+          val errorStream = process.getErrorStream()
+          val errout = scala.io.Source.fromInputStream(errorStream).mkString
+
+          ExecutionResult(outputIterator, stderr = errout)
         }
-
-        val errorStream = process.getErrorStream()
-        val errout = scala.io.Source.fromInputStream(errorStream).mkString
-
-        ExecutionResult(outputIterator, stderr = errout)
 
       case None => 
         ExecutionResult(Iterator(ShellData.Text(s"$name: not found")), exitCode = 127)
