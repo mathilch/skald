@@ -1,24 +1,38 @@
 package skald
 
+import java.nio.file.{Files, Paths, Path}
+import scala.jdk.CollectionConverters._
+import scala.util.Using
+
 object Path {
+  private val pathSep = java.io.File.pathSeparator
+
   def getAllExecutables(): List[String] = {
-    val path = sys.env.getOrElse("PATH", "")
-    path.split(java.io.File.pathSeparator)
-      .map(new java.io.File(_))
-      .filter(_.isDirectory)
-      .flatMap(_.listFiles())
-      .filter(f => f.isFile && f.canExecute)
-      .map(_.getName)
+    val pathEnv = sys.env.getOrElse("PATH", "")
+    
+    pathEnv.split(pathSep)
+      .filter(_.nonEmpty)
+      .map(Paths.get(_))
+      .filter(Files.isDirectory(_))
+      .flatMap { dir =>
+        Using(Files.newDirectoryStream(dir)) { stream =>
+          stream.asScala
+            .filter(p => Files.isRegularFile(p) && Files.isExecutable(p))
+            .map(_.getFileName.toString)
+            .toList
+        }.getOrElse(Nil) 
+      }
       .toList
       .distinct
   }
 
   def findInPath(name: String): Option[String] = {
-    val path = sys.env.getOrElse("PATH", "")
-    path.split(java.io.File.pathSeparator)
+    val pathEnv = sys.env.getOrElse("PATH", "")
+    
+    pathEnv.split(pathSep)
       .filter(_.nonEmpty)
-      .map(new java.io.File(_, name))
-      .find(f => f.exists() && f.canExecute)
-      .map(_.getAbsolutePath)
+      .map(Paths.get(_, name))
+      .find(p => Files.isRegularFile(p) && Files.isExecutable(p))
+      .map(_.toAbsolutePath.toString)
   }
 }

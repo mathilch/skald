@@ -2,7 +2,10 @@
 
 - [x] Mulighed for at gå frem og tilbage i bufferen med piletasterne
 - [ ] Fiks terminal wrapping
+
 - [ ] Regex på declare variabel navn
+- [ ] Tilføj support for brackets rundt om variabel navne: echo ${variableName}and${othervariablename}
+
 - [ ] Tests over hele linjen
 - [x] Alias
 - [x] Export
@@ -23,7 +26,7 @@
 - [ ] Tilføj standard flags til ls. Overvej at skjul hidden files ved ls bare
 - [ ] Farve highlighted builtin keyword og externals, måske paths?
 - [x] cat som en builtin så den kan bruges til dsl pipelines (Mangler flags)
-- [ ] grep?
+- [x] grep?
 - [ ] && og ||. bliver nødt til at refaktoere så exitcodes er bedre håndteret i executoren. måske ved en Result?
 
 - [ ] ordentlig README

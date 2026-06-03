@@ -1,19 +1,17 @@
 package skald
 
-import java.io.{File, FileInputStream, Reader}
-import scala.sys.process._
-import java.io.InputStreamReader
+import java.nio.file.{Files, Paths}
 import java.nio.charset.StandardCharsets
+import java.io.Reader
+import scala.sys.process._
 
 object Terminal {
-  private val ttyFile = new File("/dev/tty")
-  val inputSource: Reader = new InputStreamReader(new FileInputStream(ttyFile), StandardCharsets.UTF_8)
+  // Files.newBufferedReader pakker det hele pænt ind for dig
+  val inputSource: Reader = Files.newBufferedReader(Paths.get("/dev/tty"), StandardCharsets.UTF_8)
 
   def setRaw(): Unit =
-    // Brug sh -c for at være sikker på, at omdirigeringen bider
     Seq("sh", "-c", "stty -icanon -echo < /dev/tty").!
 
   def restore(): Unit =
     Seq("sh", "-c", "stty sane < /dev/tty").!
-
 }

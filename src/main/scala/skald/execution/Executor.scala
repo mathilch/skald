@@ -9,12 +9,12 @@ import HistoryFlag._
 import AliasFlag._
 import Result._
 
-import java.io.File
 import java.nio.file.{Path => JPath, Paths, Files => JFiles}
 import scala.sys.process.*
 import skald.JobManager.BackgroundJob
 import skald.Files.readFromFile
 import skald.ShellData.GrepMatch
+import scala.util.Using
 
 object Executor {
 
@@ -305,9 +305,9 @@ object Executor {
 
     case Source(file) =>
       val expandedPath = Files.expandPath(file)
-      val targetFile = new File(expandedPath)
+      val targetPath = Paths.get(expandedPath)
 
-      val nextEnv = ConfigLoader.loadFromFile(targetFile, env)
+      val nextEnv = ConfigLoader.loadFromFile(targetPath, env)
 
       (ExecutionResult(Iterator.empty), nextEnv)
   }
@@ -330,38 +330,45 @@ object Executor {
     
     commands.zipWithIndex.foldLeft((ExecutionResult(stdin), initialEnv)) {
       case ((accRes, currentEnv), (cmd, idx)) =>
-        val isLastCommand = idx == commands.length - 1
+        val isLastCommand = idx == commands.size - 1
         val shouldCapture = if (isLastCommand) captureOutput else true
 
         evaluate(cmd, currentEnv, accRes.output, shouldCapture)
     }
   }
 
+
+  /* stdin tilføjet i tilfælde af at external er højre led i en pipeline, i så fald vil stdin beskrive
+   * output fra venstre led
+  */
   private def runExternal(name: String, args: List[String], env: ShellEnv, stdin: Iterator[ShellData], captureOutput: Boolean): ExecutionResult = {
     createProcessBuilder(name, args, env) match {
       case Some(pb) =>
-        if (stdin.isEmpty && !captureOutput) {
-          
+
+        if (!captureOutput) {
           Terminal.restore()
           pb.inheritIO()
           val process = pb.start()
-          val exitCode = process.waitFor()
+          process.waitFor()
           Terminal.setRaw()
-
-          ExecutionResult(Iterator.empty, exitCode = exitCode)
+          ExecutionResult(Iterator.empty, exitCode = process.exitValue())
         } else {
-        
+
           val process = pb.start()
 
           if (stdin.nonEmpty) {
-            new Thread(() => {
-              val writer = new java.io.BufferedWriter(new java.io.OutputStreamWriter(process.getOutputStream))
-              stdin.foreach { data =>
-                writer.write(data.asString + "\n")
+            val thread = new Thread(() => {
+              Using(new java.io.BufferedWriter(new java.io.OutputStreamWriter(process.getOutputStream))) { writer =>
+                stdin.foreach { data =>
+                  writer.write(data.asString)
+                  writer.newLine()
+                }
+                writer.flush()
               }
-              writer.flush()
-              writer.close()
-            }).start()
+              ()
+            })
+            thread.setDaemon(true)
+            thread.start()
           }
 
           val reader = new java.io.BufferedReader(new java.io.InputStreamReader(process.getInputStream))
@@ -375,14 +382,19 @@ object Executor {
               nextLine = reader.readLine() // Forbered næste kald
               
               // Hvis vi er færdige, vent på at processen dør pænt
-              if (nextLine == null) process.waitFor() 
-              
+              if (nextLine == null) {
+                process.waitFor() 
+                reader.close()       
+              }
               ShellData.Text(current)
             }
           }
 
-          val errorStream = process.getErrorStream()
-          val errout = scala.io.Source.fromInputStream(errorStream).mkString
+          var errout = ""
+          val errThread = new Thread(() => {
+            errout = scala.io.Source.fromInputStream(process.getErrorStream).getLines().mkString("\n")
+          })
+          errThread.start()
 
           ExecutionResult(outputIterator, stderr = errout)
         }

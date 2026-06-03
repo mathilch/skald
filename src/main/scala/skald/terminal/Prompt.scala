@@ -1,6 +1,5 @@
 package skald 
 
-import java.io.{File}
 import java.nio.file.Path
 import scala.sys.process._
 
