@@ -24,28 +24,9 @@ object Main extends App {
       if (cachedPrompt.isEmpty()) PromptEngine.render(env, config)
       else cachedPrompt
 
-    if (state.tabCount == 0) {
-      val currentInput = buffer.toString
-      val suggestionOpt = HistoryManager.getSuggestion(currentInput)
-
-      // 1. Ryd linjen, print prompt og det faktiske input
-      System.out.print(s"\r\u001b[J$prompt$buffer")
-
-      // 2. Hvis vi har et forslag, og cursoren er for enden af inputtet, så tegn rest-delen
-      if (suggestionOpt.isDefined && state.cursorIdx == currentInput.length) {
-        val suggestion = suggestionOpt.get
-        val remainder = suggestion.substring(currentInput.length)
-        
-        // \u001b[90m = Lys grå (eller \u001b[38;5;8m). \u001b[0m = reset
-        System.out.print(s"\u001b[90m$remainder\u001b[0m")
-      }
-
-      // 3. Beregn, hvor cursoren FAKTISK skal være, og ryk den dertil.
-      val visiblePromptLen = prompt.replaceAll("\u001b\\[[0-9;]*[a-zA-Z]", "").length
-      val cursorCol = visiblePromptLen + state.cursorIdx + 1
-      System.out.print(s"\u001b[${cursorCol}G")
-      System.out.flush()
-    }
+    val nextState = if (state.tabCount == 0) {
+      TerminalRenderer.render(buffer, state, prompt)
+    } else state
 
     val input = KeyReader.readKey(Terminal.inputSource)
     input match {
@@ -110,61 +91,60 @@ object Main extends App {
         Completer.complete(currentInput, env) match {
           case NoMatch =>
             System.out.print("\u0007")
-            loop(buffer, state, env, envHistory, cachedPrompt = prompt, config = config)
+            loop(buffer, nextState, env, envHistory, cachedPrompt = prompt, config = config)
 
           case SingleMatch(text) =>
             buffer.clear()
             buffer.append(text)
             //System.out.print(s"\r\u001b[K$prompt$buffer")
-            val newState = state.copy(tabCount = 0, cursorIdx = text.length)
+            val newState = nextState.copy(tabCount = 0, cursorIdx = text.length)
             loop(buffer, newState, env, envHistory, cachedPrompt = prompt, config = config)
 
           case MultipleMatches(lcp, options) =>
             if (lcp.length > currentInput.length) {
               buffer.clear()
               buffer.append(lcp)
-              //System.out.print(s"\r\u001b[K$prompt$buffer")
 
-              val newState = state.copy(tabCount = 0, cursorIdx = lcp.length)
+              val newState = nextState.copy(tabCount = 0, cursorIdx = lcp.length)
               loop(buffer, newState, env, envHistory, cachedPrompt = prompt, config = config)
 
             } else if (state.tabCount == 0) {
               System.out.print("\u0007")
-              val newState = state.copy(tabCount = 1)
+              val newState = nextState.copy(tabCount = 1)
               loop(buffer, newState, env, envHistory, cachedPrompt = prompt, config = config)
             } else if (state.tabCount == 1){
               System.out.print("\n" + options.sorted.mkString("  ") + "\n")
               System.out.print(s"$prompt$buffer")
               System.out.flush()
-              val newState = state.copy(tabCount = 2)
+              val newState = nextState.copy(tabCount = 2)
               loop(buffer, newState, env, envHistory, cachedPrompt = prompt, config = config)
             } else {
               System.out.print("\u0007")
-              loop(buffer, state, env, envHistory, cachedPrompt = prompt, config = config)
+              loop(buffer, nextState, env, envHistory, cachedPrompt = prompt, config = config)
             }
         }
 
       case Backspace => 
-        if (buffer.nonEmpty && state.cursorIdx > 0) {
-          buffer.deleteCharAt(state.cursorIdx - 1)
-          val newState = state.copy(cursorIdx = state.cursorIdx - 1)
+        if (buffer.nonEmpty && nextState.cursorIdx > 0) {
+          buffer.deleteCharAt(nextState.cursorIdx - 1)
+          val newState = nextState.copy(cursorIdx = nextState.cursorIdx - 1)
           loop(buffer, newState, env, envHistory, cachedPrompt = prompt, config = config)
         } else {
-          loop(buffer, state, env, envHistory, cachedPrompt = prompt, config = config)
+          loop(buffer, nextState, env, envHistory, cachedPrompt = prompt, config = config)
         }
 
       case UpArrow => 
-        val newHistoryIdx = state.historyIdx + 1
+        val newHistoryIdx = nextState.historyIdx + 1
         if (newHistoryIdx < HistoryManager.size) {
           val out = HistoryManager.getAtIndex(newHistoryIdx)
 
           buffer.clear()
           buffer.append(out)
 
-          val newState = state.copy(historyIdx = newHistoryIdx, cursorIdx = out.length)
+          val newState = nextState.copy(historyIdx = newHistoryIdx, cursorIdx = out.length)
           loop(buffer, newState, env, envHistory, cachedPrompt = prompt, config = config)
         } else {
-          loop(buffer, state, env, envHistory, cachedPrompt = prompt, config = config)
+          loop(buffer, nextState, env, envHistory, cachedPrompt = prompt, config = config)
         }
 
       case DownArrow => 
@@ -175,19 +155,19 @@ object Main extends App {
         buffer.append(out)
 
         if (newHistoryIdx == -1) {
-          val newState = state.copy(cursorIdx = 0)
+          val newState = nextState.copy(cursorIdx = 0)
           loop(buffer, newState, env, envHistory, cachedPrompt = prompt, config = config)
         } else {
-          val newState = state.copy(historyIdx = newHistoryIdx, cursorIdx = out.length)
+          val newState = nextState.copy(historyIdx = newHistoryIdx, cursorIdx = out.length)
           loop(buffer, newState, env, envHistory, cachedPrompt = prompt, config = config)
         }
 
       case LeftArrow =>
-        val newState = state.copy(cursorIdx = Math.max(0, state.cursorIdx - 1))
+        val newState = nextState.copy(cursorIdx = Math.max(0, nextState.cursorIdx - 1))
         loop(buffer, newState, env, envHistory, cachedPrompt = prompt, config = config)
 
       case RightArrow =>
-        val newState = state.copy(cursorIdx = Math.min(buffer.length, state.cursorIdx + 1))
+        val newState = nextState.copy(cursorIdx = Math.min(buffer.length, nextState.cursorIdx + 1))
         loop(buffer, newState, env, envHistory, cachedPrompt = prompt, config = config)
 
       case End => 
@@ -195,15 +175,18 @@ object Main extends App {
           case Some(suggestion) =>
             buffer.clear()
             buffer.append(suggestion)
-            val newState = state.copy(cursorIdx = suggestion.length)
+            val newState = nextState.copy(cursorIdx = suggestion.length)
             loop(buffer, newState, env, envHistory, cachedPrompt = prompt, config = config)
           case None => 
-            loop(buffer, state, env, envHistory, cachedPrompt = prompt, config = config)
+            loop(buffer, nextState, env, envHistory, cachedPrompt = prompt, config = config)
         }
 
       case CharKey(c) => 
-        buffer.insert(state.cursorIdx, c)
-        val newState = state.copy(cursorIdx = state.cursorIdx + 1, historyIdx = -1, tabCount = 0)
+        buffer.insert(nextState.cursorIdx, c)
+        val newState = nextState.copy(
+          cursorIdx = nextState.cursorIdx + 1, 
+          historyIdx = -1, 
+          tabCount = 0)
         loop(buffer, newState, env, envHistory, cachedPrompt = prompt, config = config)
 
       case Escape => 
@@ -212,7 +195,7 @@ object Main extends App {
 
       case Unknown =>
         System.out.print("\u0007")
-        loop(buffer, state, env, envHistory, cachedPrompt = prompt, config = config)
+        loop(buffer, nextState, env, envHistory, cachedPrompt = prompt, config = config)
     }
   }
 
