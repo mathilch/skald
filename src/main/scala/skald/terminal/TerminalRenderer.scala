@@ -3,21 +3,46 @@ package skald
 import skald.terminal.grid._
 
 object TerminalRenderer {
-  def render(buffer: StringBuilder, state: EditorState, prompt: List[Span]): EditorState = {
-    System.out.print("\r\u001b[K")
 
-    val termSize = Terminal.getSize()
-    val grid = Grid(termSize.columns, termSize.rows)
-    
-    val endOfPromptX = grid.fill(prompt, 0)
-    grid.putString(endOfPromptX, 0, buffer.toString, Style())
+  def render(editor: EditorState, activePrompt: List[Span], termWidth: Int): Int = {
+    val promptLen = activePrompt.map(_.text.length).sum
+    val totalChars = promptLen + editor.buffer.length
+    val cursorAbsPos = promptLen + editor.cursorIdx
 
-    // Cursor positionering
-    val absX = endOfPromptX + state.cursorIdx
-    val (curY, curX) = (absX / termSize.columns, absX % termSize.columns)
-    System.out.print(s"\u001b[${curY + 1};${curX + 1}H")
-    System.out.flush()
+    val physicalRow = if (totalChars > 0 && totalChars % termWidth == 0) {
+      (totalChars / termWidth) - 1
+    } else {
+      totalChars / termWidth
+    }
 
-    state
+    val targetRow = cursorAbsPos / termWidth
+    val targetCol = cursorAbsPos % termWidth
+
+    if (editor.tabCount == 0) {
+      if (editor.renderedLines > 0) {
+        System.out.print(s"\u001b[${editor.renderedLines}A")
+      }
+      System.out.print("\r") 
+      System.out.print("\u001b[J") // Clear everything below
+
+      activePrompt.foreach(s => System.out.print(s"\u001b[0m${if(s.style.bold) "\u001b[1m" else ""}${s.style.foreground}${s.text}"))
+      System.out.print(s"\u001b[0m${editor.buffer}")
+
+      System.out.print("\r")
+
+      val rowDiff = targetRow - physicalRow
+      if (rowDiff > 0) {
+        System.out.print(s"\u001b[${rowDiff}B") // Move down
+      } else if (rowDiff < 0) {
+        System.out.print(s"\u001b[${-rowDiff}A") // Move up
+      }
+
+      if (targetCol > 0) {
+        System.out.print(s"\u001b[${targetCol}C")
+      }
+
+      System.out.flush()
+    }
+    targetRow
   }
 }

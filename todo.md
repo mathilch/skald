@@ -1,7 +1,7 @@
 # TODO
 
 - [x] Mulighed for at gå frem og tilbage i bufferen med piletasterne
-- [ ] Fiks terminal wrapping
+- [x] Fiks terminal wrapping
 
 - [ ] Regex på declare variabel navn
 - [ ] Tilføj support for brackets rundt om variabel navne: echo ${variableName}and${othervariablename}

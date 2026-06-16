@@ -22,44 +22,19 @@ object Main extends App {
     
     val activePrompt = if (prompt.isEmpty) PromptEngine.render(shell.current, config) else prompt
     val termWidth = Terminal.getSize().columns
-
-    // --- RENDERING AF DEN AKTIVE LINJE ---
-    if (editor.tabCount == 0) {
-      if (editor.renderedLines > 0) {
-        System.out.print(s"\u001b[${editor.renderedLines}A")
-      }
-      System.out.print("\r") 
-      System.out.print("\u001b[J")
-
-      activePrompt.foreach(s => System.out.print(s"\u001b[0m${if(s.style.bold) "\u001b[1m" else ""}${s.style.foreground}${s.text}"))
-      // Her læser vi nu direkte fra state.buffer
-      System.out.print(s"\u001b[0m${editor.buffer}")
-
-      val promptLen = activePrompt.map(_.text.length).sum
-      val totalChars = promptLen + editor.buffer.length
-      val cursorAbsPos = promptLen + editor.cursorIdx
-      
-      val targetRow = cursorAbsPos / termWidth
-      val targetCol = cursorAbsPos % termWidth
-      val totalRows = totalChars / termWidth
-
-      val moveUp = totalRows - targetRow
-      if (moveUp > 0) System.out.print(s"\u001b[${moveUp}A")
-      
-      System.out.print("\r")
-      if (targetCol > 0) System.out.print(s"\u001b[${targetCol}C")
-
-      System.out.flush()
-    }
-
-    val newRows = (activePrompt.map(_.text.length).sum + editor.buffer.length) / termWidth
-    val renderedEditor = editor.copy(renderedLines = newRows)
+    val newRenderedLine = TerminalRenderer.render(editor, activePrompt, termWidth)
+    val renderedEditor = editor.copy(renderedLines = newRenderedLine)
 
     val input = KeyReader.readKey(Terminal.inputSource)
     input match {
 
-      case CtrlD => ()
-      case CtrlC => ()
+      case CtrlD => 
+        if (editor.buffer.isEmpty) System.out.print("\r\nBye!\r\n") // Exit shell hvis linjen er tom
+        else loop(renderedEditor, shell, activePrompt, config)
+
+      case CtrlC => 
+        System.out.print("^C\r\n")
+        loop(EditorState(), shell, Nil, config) 
 
       case Enter => 
         val cmdLine = editor.buffer.trim
@@ -108,29 +83,29 @@ object Main extends App {
         }
 
       case Tab =>
-        val currentInput = editor.buffer
+        val currentInput = renderedEditor.buffer
         Completer.complete(currentInput, shell.current) match {
           case NoMatch =>
             System.out.print("\u0007")
-            loop(editor, shell, activePrompt, config)
+            loop(renderedEditor, shell, activePrompt, config)
 
           case SingleMatch(text) =>
-            val newState = editor.setBuffer(text).copy(tabCount = 0)
+            val newState = renderedEditor.setBuffer(text).copy(tabCount = 0)
             loop(newState, shell, activePrompt, config)
 
           case MultipleMatches(lcp, options) =>
             if (lcp.length > currentInput.length) {
-              val newState = editor.setBuffer(lcp).copy(tabCount = 0)
+              val newState = renderedEditor.setBuffer(lcp).copy(tabCount = 0)
               loop(newState, shell, activePrompt, config)
 
             } else if (editor.tabCount == 0) {
               System.out.print("\u0007")
-              val newState = editor.copy(tabCount = 1)
+              val newState = renderedEditor.copy(tabCount = 1)
               loop(newState, shell, activePrompt, config)
             } else if (editor.tabCount == 1){
               System.out.print("\n" + options.sorted.mkString("  ") + "\n")
               System.out.flush()
-              val newState = editor.copy(tabCount = 2)
+              val newState = renderedEditor.copy(tabCount = 2)
               loop(newState, shell, activePrompt, config)
             } else {
               System.out.print("\u0007")
@@ -141,18 +116,18 @@ object Main extends App {
       case Backspace => loop(renderedEditor.backspace, shell, activePrompt, config)
 
       case UpArrow => 
-        val newHistoryIdx = editor.historyIdx + 1
+        val newHistoryIdx = renderedEditor.historyIdx + 1
         if (newHistoryIdx < HistoryManager.size) {
           val out = HistoryManager.getAtIndex(newHistoryIdx)
 
           val newState = renderedEditor.setBuffer(out).copy(historyIdx = newHistoryIdx)
           loop(newState, shell, activePrompt, config)
         } else {
-          loop(editor, shell, activePrompt, config)
+          loop(renderedEditor, shell, activePrompt, config)
         }
 
       case DownArrow => 
-        val newHistoryIdx = editor.historyIdx - 1
+        val newHistoryIdx = renderedEditor.historyIdx - 1
         if (newHistoryIdx == -1) {
           val newState = renderedEditor.setBuffer("").copy(historyIdx = -1)
           loop(newState, shell, activePrompt, config)
@@ -165,15 +140,15 @@ object Main extends App {
         }
 
       case LeftArrow =>
-        val newState = renderedEditor.copy(cursorIdx = Math.max(0, editor.cursorIdx - 1))
+        val newState = renderedEditor.copy(cursorIdx = Math.max(0, renderedEditor.cursorIdx - 1))
         loop(newState, shell, activePrompt, config)
 
       case RightArrow =>
-        val newState = renderedEditor.copy(cursorIdx = Math.min(editor.buffer.length, editor.cursorIdx + 1))
+        val newState = renderedEditor.copy(cursorIdx = Math.min(renderedEditor.buffer.length, renderedEditor.cursorIdx + 1))
         loop(newState, shell, activePrompt, config)
 
       case End => 
-        HistoryManager.getSuggestion(editor.buffer) match {
+        HistoryManager.getSuggestion(renderedEditor.buffer) match {
           case Some(suggestion) =>
             val newState = renderedEditor.setBuffer(suggestion)
             loop(newState, shell, activePrompt, config)
