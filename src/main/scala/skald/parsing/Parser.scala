@@ -76,7 +76,7 @@ object Parser {
     case "pwd"      => Success(Pwd)
     case "type"     => Success(Type(tail))
     case "cd"       => Success(Cd(tail))
-    case "ls"       => Success(Ls)
+    case "ls"       => Success(Ls(tail))
     case "jobs"     => Success(Jobs)
     case "cat"      => Success(Cat(tail))
     case "complete" => parseComplete(tail)

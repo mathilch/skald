@@ -49,8 +49,13 @@ object Executor {
         case Left(err)      => (ExecutionResult(Iterator.empty, stderr = err + "\n", 1), env)
       }
 
-    case Ls =>
-      val fileNodes = Files.listDirectory(env.cwd).map(ShellData.FileNode(_))
+    case Ls(args) =>
+      val targetDir = args match {
+        case Nil => env.cwd
+        case pathStr :: _ => env.cwd.resolve(pathStr)
+      }
+
+      val fileNodes = Files.listDirectory(targetDir).map(ShellData.FileNode(_))
       (ExecutionResult(fileNodes), env)
 
     // TODO Håndter errors bedre i tilfælde af redirections

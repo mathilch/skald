@@ -6,7 +6,7 @@ enum Command:
   case Pwd
   case Type(args: List[String])
   case Cd(args: List[String])
-  case Ls
+  case Ls(args: List[String])
   case Cat(files: List[String])
   case Grep(pattern: String, files: List[String])
   case Complete(arg: CompleteFlag)

@@ -18,31 +18,29 @@ object TerminalRenderer {
     val targetRow = cursorAbsPos / termWidth
     val targetCol = cursorAbsPos % termWidth
 
-    if (editor.tabCount == 0) {
-      if (editor.renderedLines > 0) {
-        System.out.print(s"\u001b[${editor.renderedLines}A")
-      }
-      System.out.print("\r") 
-      System.out.print("\u001b[J") // Clear everything below
-
-      activePrompt.foreach(s => System.out.print(s"\u001b[0m${if(s.style.bold) "\u001b[1m" else ""}${s.style.foreground}${s.text}"))
-      System.out.print(s"\u001b[0m${editor.buffer}")
-
-      System.out.print("\r")
-
-      val rowDiff = targetRow - physicalRow
-      if (rowDiff > 0) {
-        System.out.print(s"\u001b[${rowDiff}B") // Move down
-      } else if (rowDiff < 0) {
-        System.out.print(s"\u001b[${-rowDiff}A") // Move up
-      }
-
-      if (targetCol > 0) {
-        System.out.print(s"\u001b[${targetCol}C")
-      }
-
-      System.out.flush()
+    if (editor.renderedLines > 0) {
+      System.out.print(s"\u001b[${editor.renderedLines}A")
     }
+    System.out.print("\r") 
+    System.out.print("\u001b[J") // Clear everything below
+
+    activePrompt.foreach(s => System.out.print(s"\u001b[0m${if(s.style.bold) "\u001b[1m" else ""}${s.style.foreground}${s.text}"))
+    System.out.print(s"\u001b[0m${editor.buffer}")
+
+    System.out.print("\r")
+
+    val rowDiff = targetRow - physicalRow
+    if (rowDiff > 0) {
+      System.out.print(s"\u001b[${rowDiff}B") // Move down
+    } else if (rowDiff < 0) {
+      System.out.print(s"\u001b[${-rowDiff}A") // Move up
+    }
+
+    if (targetCol > 0) {
+      System.out.print(s"\u001b[${targetCol}C")
+    }
+    System.out.flush()
+    
     targetRow
   }
 }

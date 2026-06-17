@@ -17,7 +17,8 @@ object Main extends App {
     editor: EditorState = EditorState(),
     shell: ShellState, 
     prompt: List[Span] = Nil,
-    config: SkaldConfig
+    config: SkaldConfig,
+    screenOutput: List[List[Span]] = Nil
   ): Unit = {
     
     val activePrompt = if (prompt.isEmpty) PromptEngine.render(shell.current, config) else prompt
@@ -36,82 +37,117 @@ object Main extends App {
         System.out.print("^C\r\n")
         loop(EditorState(), shell, Nil, config) 
 
-      case Enter => 
+      case Enter =>
         val cmdLine = editor.buffer.trim
-        System.out.print("\r\n")
-        System.out.flush()
-        
-        if (cmdLine == "undo") {
-          val nextShell = shell.undo
-          if (nextShell != shell) {
-            System.out.print(s"undo: Rolled back shell environment to: ${nextShell.current.cwd}\r\n")
-          } else {
-            System.out.print("undo: No shell environment to roll back to!\r\n")
-          }
-          JobManager.reapJobs()
-          loop(EditorState(), nextShell, Nil, config)
-        } 
-        else if (cmdLine.nonEmpty) {
-          val tokens = Lexer.tokenizeInput(cmdLine)
-          Parser.parse(tokens, shell.current.aliases) match {
-            case Success(command) => {
-              HistoryManager.addCommand(cmdLine)
-              val (res, nextEnv) = Executor.evaluate(command, shell.current)
-
-              res.output.foreach { item =>
-                System.out.print(item.asString + "\n")
-                System.out.flush()
-              }
-
-              if (res.stderr.nonEmpty) {
-                System.out.print(res.stderr)
-                System.out.flush()
-              }
-
-              JobManager.reapJobs()
-              
-              loop(EditorState(), shell.update(nextEnv), Nil, config)
+          System.out.print("\r\n")
+          System.out.flush()
+          
+          if (cmdLine == "undo") {
+            val nextShell = shell.undo
+            if (nextShell != shell) {
+              System.out.print(s"undo: Rolled back shell environment to: ${nextShell.current.cwd}\r\n")
+            } else {
+              System.out.print("undo: No shell environment to roll back to!\r\n")
             }
-            case Fail(err) => 
-              System.out.print(err.printError)
-              JobManager.reapJobs()
-              loop(EditorState(), shell, Nil, config)
+            JobManager.reapJobs()
+            loop(EditorState(), nextShell, Nil, config)
+          } 
+          else if (cmdLine.nonEmpty) {
+            val tokens = Lexer.tokenizeInput(cmdLine)
+            Parser.parse(tokens, shell.current.aliases) match {
+              case Success(command) => {
+                HistoryManager.addCommand(cmdLine)
+                val (res, nextEnv) = Executor.evaluate(command, shell.current)
+
+                res.output.foreach { item =>
+                  System.out.print(item.asString + "\n")
+                  System.out.flush()
+                }
+
+                if (res.stderr.nonEmpty) {
+                  System.out.print(res.stderr)
+                  System.out.flush()
+                }
+
+                JobManager.reapJobs()
+                
+                loop(EditorState(), shell.update(nextEnv), Nil, config)
+              }
+              case Fail(err) => 
+                System.out.print(err.printError)
+                JobManager.reapJobs()
+                loop(EditorState(), shell, Nil, config)
+            }
+          } else {
+            JobManager.reapJobs()
+            loop(EditorState(), shell, Nil, config)
           }
-        } else {
-          JobManager.reapJobs()
-          loop(EditorState(), shell, Nil, config)
-        }
 
       case Tab =>
-        val currentInput = renderedEditor.buffer
-        Completer.complete(currentInput, shell.current) match {
-          case NoMatch =>
-            System.out.print("\u0007")
-            loop(renderedEditor, shell, activePrompt, config)
+        editor.tabState match {
+          case TabState.Inactive =>
+            val currentInput = editor.buffer
+            Completer.complete(currentInput, shell.current) match {
+              case NoMatch => 
+                System.out.print("\u0007")
+                loop(editor, shell, activePrompt, config)
 
-          case SingleMatch(text) =>
-            val newState = renderedEditor.setBuffer(text).copy(tabCount = 0)
-            loop(newState, shell, activePrompt, config)
+              case SingleMatch(completed) => 
+                loop(editor.setBuffer(completed), shell, activePrompt, config)
 
-          case MultipleMatches(lcp, options) =>
-            if (lcp.length > currentInput.length) {
-              val newState = renderedEditor.setBuffer(lcp).copy(tabCount = 0)
-              loop(newState, shell, activePrompt, config)
-
-            } else if (editor.tabCount == 0) {
-              System.out.print("\u0007")
-              val newState = renderedEditor.copy(tabCount = 1)
-              loop(newState, shell, activePrompt, config)
-            } else if (editor.tabCount == 1){
-              System.out.print("\n" + options.sorted.mkString("  ") + "\n")
-              System.out.flush()
-              val newState = renderedEditor.copy(tabCount = 2)
-              loop(newState, shell, activePrompt, config)
-            } else {
-              System.out.print("\u0007")
-              loop(editor, shell, activePrompt, config)
+              case MultipleMatches(lcp, options) => 
+                if (lcp.length > renderedEditor.buffer.length) {
+                  loop(renderedEditor.setBuffer(lcp), shell, activePrompt, config)
+                } else {
+                  val nextState = renderedEditor.copy(
+                    tabState = TabState.Active(editor.buffer, options.sorted.toVector, 0)
+                  )
+                  System.out.println("\n" + options.sorted.mkString(" "))
+                  loop(nextState, shell, activePrompt, config)
+                }
             }
+          case TabState.Active(prefix, options, idx) =>
+            val currentSelection = options(idx)
+            val newBuffer = prefix + currentSelection
+
+            val nextIdx = (idx + 1) % options.length
+            val nextState = renderedEditor.updateBuffer(newBuffer).copy(
+              tabState = TabState.Active(prefix, options, nextIdx)
+            )
+
+            loop(nextState, shell, activePrompt, config)
         }
+
+
+        // val currentInput = renderedEditor.buffer
+        // Completer.complete(currentInput, shell.current) match {
+        //   case NoMatch =>
+        //     System.out.print("\u0007")
+        //     loop(renderedEditor, shell, activePrompt, config)
+        //
+        //   case SingleMatch(text) =>
+        //     val newState = renderedEditor.setBuffer(text).copy(tabCount = 0)
+        //     loop(newState, shell, activePrompt, config)
+        //
+        //   case MultipleMatches(lcp, options) =>
+        //     if (lcp.length > currentInput.length) {
+        //       val newState = renderedEditor.setBuffer(lcp).copy(tabCount = 0)
+        //       loop(newState, shell, activePrompt, config)
+        //
+        //     } else if (editor.tabCount == 0) {
+        //       System.out.print("\u0007")
+        //       val newState = renderedEditor.copy(tabCount = 1)
+        //       loop(newState, shell, activePrompt, config)
+        //     } else if (editor.tabCount == 1){
+        //       System.out.print("\n" + options.sorted.mkString("  ") + "\n")
+        //       System.out.flush()
+        //       val newState = renderedEditor.copy(tabCount = 2)
+        //       loop(newState, shell, activePrompt, config)
+        //     } else {
+        //       System.out.print("\u0007")
+        //       loop(editor, shell, activePrompt, config)
+        //     }
+        // }
 
       case Backspace => loop(renderedEditor.backspace, shell, activePrompt, config)
 
@@ -123,7 +159,7 @@ object Main extends App {
           val newState = renderedEditor.setBuffer(out).copy(historyIdx = newHistoryIdx)
           loop(newState, shell, activePrompt, config)
         } else {
-          loop(renderedEditor, shell, activePrompt, config)
+          loop(renderedEditor.copy(tabState = TabState.Inactive), shell, activePrompt, config)
         }
 
       case DownArrow => 
@@ -136,31 +172,31 @@ object Main extends App {
           val newState = renderedEditor.setBuffer(out).copy(historyIdx = newHistoryIdx)
           loop(newState, shell, activePrompt, config)
         } else {
-          loop(renderedEditor, shell, activePrompt, config)
+          loop(renderedEditor.copy(tabState = TabState.Inactive), shell, activePrompt, config)
         }
 
       case LeftArrow =>
-        val newState = renderedEditor.copy(cursorIdx = Math.max(0, renderedEditor.cursorIdx - 1))
+        val newState = renderedEditor.copy(cursorIdx = Math.max(0, renderedEditor.cursorIdx - 1), tabState = TabState.Inactive)
         loop(newState, shell, activePrompt, config)
 
       case RightArrow =>
-        val newState = renderedEditor.copy(cursorIdx = Math.min(renderedEditor.buffer.length, renderedEditor.cursorIdx + 1))
+        val newState = renderedEditor.copy(cursorIdx = Math.min(renderedEditor.buffer.length, renderedEditor.cursorIdx + 1), tabState = TabState.Inactive)
         loop(newState, shell, activePrompt, config)
 
       case End => 
         HistoryManager.getSuggestion(renderedEditor.buffer) match {
           case Some(suggestion) =>
-            val newState = renderedEditor.setBuffer(suggestion)
+            val newState = renderedEditor.setBuffer(suggestion).copy(tabState = TabState.Inactive)
             loop(newState, shell, activePrompt, config)
           case None => 
-            loop(renderedEditor, shell, activePrompt, config)
+            loop(renderedEditor.copy(tabState = TabState.Inactive), shell, activePrompt, config)
         }
 
       case CharKey(c) => 
         loop(renderedEditor.insertChar(c), shell, activePrompt, config)
 
       case Escape => 
-        val newState = renderedEditor.copy(tabCount = 0)
+        val newState = renderedEditor.copy(tabState = TabState.Inactive)
         loop(newState, shell, activePrompt, config)
 
       case Unknown =>
