@@ -6,11 +6,11 @@ import Result._
 
 object Files {
 
-  def findEntriesInDirectory(dir: String, file: String): List[Path] =
-    val path = Paths.get(expandPath(file))
+  def findEntriesInDirectory(dir: String, prefix: String): List[Path] =
+    val path = Paths.get(expandPath(dir))
     if (JFiles.exists(path) && JFiles.isDirectory(path)) {
       JFiles.list(path).iterator.asScala
-        .filter(_.getFileName.toString.startsWith(file))
+        .filter(_.getFileName.toString.startsWith(prefix))
         .toList.sorted
     } else Nil
 
