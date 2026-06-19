@@ -21,8 +21,8 @@ enum ShellData:
       val coloredContent = content.replace(matchedWord, matchedWord.colorize(Color.Yellow))
       source match {
         case Some(fileName) => 
-          val coloredFile = s"${Color.Magenta.ansiCode}$fileName${Color.Reset.ansiCode}"
-          val coloredLine = s"${Color.Green.ansiCode}line $line${Color.Reset.ansiCode}"
+          val coloredFile = fileName.colorize(Color.Magenta)
+          val coloredLine = line.toString.colorize(Color.Green)
           
           s"$coloredFile: $coloredLine: $coloredContent"
         case None           => coloredContent

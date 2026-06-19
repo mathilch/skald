@@ -1,9 +1,9 @@
 package skald.terminal.grid
 
+import skald.{Color, Style, Span}
+
 import scala.annotation.tailrec
 
-case class Span(text: String, style: Style)
-case class Style(foreground: String = "\u001b[37m", bold: Boolean = false)
 case class Cell(char: Char, style: Style)
 
 case class Grid(width: Int, height: Int) {
@@ -40,8 +40,7 @@ case class Grid(width: Int, height: Int) {
       val cell = grid(i)
       
       if (currentStyle != Some(cell.style)) {
-        sb.append("\u001b[0m").append(cell.style.foreground)
-        if (cell.style.bold) sb.append("\u001b[1m")
+        sb.append("\u001b[0m").append(cell.style.fg)
         currentStyle = Some(cell.style)
       }
 

@@ -1,7 +1,5 @@
 package skald 
 
-import skald.terminal.grid.Span
-
 import scala.io.StdIn
 import scala.sys.process._
 import scala.annotation.tailrec
@@ -18,7 +16,6 @@ object Main extends App {
     shell: ShellState, 
     prompt: List[Span] = Nil,
     config: SkaldConfig,
-    screenOutput: List[List[Span]] = Nil
   ): Unit = {
     
     val activePrompt = if (prompt.isEmpty) PromptEngine.render(shell.current, config) else prompt
@@ -45,7 +42,8 @@ object Main extends App {
           if (cmdLine == "undo") {
             val nextShell = shell.undo
             if (nextShell != shell) {
-              System.out.print(s"undo: Rolled back shell environment to: ${nextShell.current.cwd}\r\n")
+              val coloredUndo = "undo".colorize(Color.Red)
+              System.out.print(s"${coloredUndo}: Rolled back shell environment to: ${nextShell.current.cwd}\r\n")
             } else {
               System.out.print("undo: No shell environment to roll back to!\r\n")
             }

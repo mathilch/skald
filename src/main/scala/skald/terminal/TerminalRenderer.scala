@@ -24,8 +24,13 @@ object TerminalRenderer {
     System.out.print("\r") 
     System.out.print("\u001b[J") // Clear everything below
 
-    activePrompt.foreach(s => System.out.print(s"\u001b[0m${if(s.style.bold) "\u001b[1m" else ""}${s.style.foreground}${s.text}"))
-    System.out.print(s"\u001b[0m${editor.buffer}")
+    def renderSpans(spans: List[Span]): Unit = {
+      spans.foreach(s => System.out.print(s"\u001b[0m${s.style.fg.ansiCode}${s.text}"))
+    }
+
+    renderSpans(activePrompt)
+    val highlightedBuffer = SyntaxHighlighter.highlight(editor.buffer)
+    renderSpans(highlightedBuffer)
 
     System.out.print("\r")
 

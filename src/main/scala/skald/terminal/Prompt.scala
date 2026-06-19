@@ -1,10 +1,8 @@
 package skald 
 
-import skald.terminal.grid.Span
 
 import java.nio.file.Path
 import scala.sys.process._
-import skald.terminal.grid.Style
 import scala.util.matching.Regex
 import scala.annotation.tailrec
 
@@ -44,7 +42,7 @@ object PromptEngine {
         } else None
 
         val style = Color.fromString(m.group(1))
-          .map(c => Style(foreground = c.ansiCode))
+          .map(c => Style(fg = c))
           .getOrElse(Style())
         val matchedSegment = Span(m.group(2), style)
 

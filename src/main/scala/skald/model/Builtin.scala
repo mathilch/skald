@@ -17,6 +17,7 @@ enum Builtin(val name: String):
   case Source   extends Builtin("source")
   case Cat      extends Builtin("cat")
   case Grep     extends Builtin("grep")
+  case Undo     extends Builtin("undo")
 
 object Builtin:
   def fromString(s: String): Option[Builtin] =

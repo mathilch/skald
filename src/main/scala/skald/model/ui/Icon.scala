@@ -12,4 +12,4 @@ enum Icon(val code: String):
   case Scala  extends Icon("\ue737")  //  (Scala)
 
 extension (icon: Icon)
-  def withColor(c: Color): String = s"${c.ansiCode}${icon.code}${Color.Reset.ansiCode}"
+  def withColor(c: Color): String = s"${icon.code.colorize(c)}"
